@@ -1,0 +1,4 @@
+SpeechRecognition>=3.10.4
+sounddevice>=0.5.0
+pyinstaller>=6.10
+Pillow>=10.0
