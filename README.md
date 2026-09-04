@@ -1,164 +1,207 @@
-# Kabutopz Voice Protocol v7.1
+# Kabutopz Voice Protocol
 
-This build adds permanent Kabutopz branding to the Command History area, renames the application/window to Kabutopz Voice Protocol, and builds as `KabutopzVoiceProtocol.exe`.
+Kabutopz Voice Protocol is a Windows voice-command app for *Star Citizen*. It lets you run game actions with spoken phrases, edit keybinds, create custom commands, look up mining sites, and find current ship purchase and rental data.
 
-## New pages
+The app uses Windows `SendInput` to send set keybinds. It does not use the third-party `keyboard` or `mouse` hook packages.
 
-The PAGE dropdown now includes:
+This is an accessibility tool.
 
-- VOICE PROTOCOL
-- CUSTOMIZE
-- PHRASES
-- KEYBINDS
-- MINING MODE
-- SHIP FINDER
-- GUIDES
-- ANNOUNCEMENTS
+## Features
 
-## SHIP FINDER
+- Voice commands for common *Star Citizen* actions
+- Editable phrases and keybinds
+- Custom commands with one or more trigger phrases
+- Tap and Hold input modes
+- Ship purchase and rental lookups
+- Mining location questions with spoken answers
+- Reverse mining-signature lookup
+- Links to *Star Citizen* guides and announcements
+- Saved settings and custom commands between launches
 
-Search for a ship such as:
+## Pages
 
-`Cutlass Black`
+The PAGE menu includes:
 
-The app queries the public Star Citizen Wiki community API for current vehicle data and tries to display:
+- **VOICE PROTOCOL** — Start and manage voice control.
+- **CUSTOMIZE** — Change app settings.
+- **PHRASES** — Edit phrases and keybinds by group.
+- **CUSTOM WORDS** — Create and manage custom voice commands.
+- **KEYBINDS** — Search actions and change their keys.
+- **MINING MODE** — Use mining tools and signature lookup.
+- **SHIP FINDER** — Find ship purchase and rental details.
+- **GUIDES** — Open the Kabutopz *Star Citizen* guides playlist on YouTube.
+- **ANNOUNCEMENTS** — Open the official Spectrum Announcements forum.
+
+## Voice Commands
+
+While Voice Protocol is listening, speak a saved phrase to run its linked keybind.
+
+For example:
+
+```text
+turn off star citizen
+```
+
+This command sends `Alt+F4`.
+
+## Custom Words
+
+The **CUSTOM WORDS** page lets you:
+
+- Name a new action.
+- Pick an existing subcategory or enter a new one.
+- Set a keybind.
+- Choose Tap or Hold.
+- Add more than one trigger phrase.
+- Turn each phrase on or off.
+- Save the command for later use.
+
+Saved custom commands join the normal voice matching list. They also appear in the **CUSTOM PHRASES** group on the **PHRASES** page.
+
+To remove saved items, select a command under **EXISTING CUSTOM COMMANDS**, then use:
+
+- **DELETE SELECTED PHRASE** to remove one phrase.
+- **DELETE CUSTOM COMMAND** to remove the full command.
+
+Each custom command must keep at least one phrase.
+
+## Keybind Search
+
+The **KEYBINDS** page can search by key, action, phrase, or category.
+
+Use **FILTER BY KEYBIND** for an exact key match. For example, entering `K`, `I`, `F12`, or `alt+f4` shows only actions set to that keybind. This mode does not match action names or phrase text.
+
+Use **SEARCH ALL** for a broad search, or **CLEAR** to reset the results.
+
+## Ship Finder
+
+Search for a ship by name, such as:
+
+```text
+Cutlass Black
+```
+
+The app checks the public Star Citizen Wiki community API and tries to show:
 
 - Purchase locations
 - Purchase prices
 - Rental locations
 - Rental prices
 
-A Cutlass Black fallback snapshot is included if the live price schema changes or is temporarily unavailable.
+The app includes a Cutlass Black backup snapshot in case the live price format changes or the service cannot return data. Community data may change with each game patch.
 
-The live data is community-maintained and patch-sensitive.
+## Mining Questions
 
-## Mining location questions
+While Voice Protocol is listening, ask a question such as:
 
-While Voice Protocol is listening, ask:
+```text
+where can I mine iron
+```
 
-`where can I mine iron`
+The app checks current Star Citizen Wiki commodity data and speaks the answer. If the live lookup fails, it uses a saved Iron hotspot list.
 
-The app queries the current Star Citizen Wiki commodity data and answers with TTS.
+The existing reverse signature lookup remains on the **MINING MODE** page.
 
-If live lookup fails, the Iron fallback hotspot list includes places such as:
+## Support
 
-- Pyro V-c (Adir)
-- Pyro V-b (Vatra)
-- Pyro III (Bloom)
-- Magda
-- Lyria
-- Calliope
-- Pyro I
-- Pyro II (Monox)
-- microTech
-- Wala
-- Yela Asteroid Belt
-- Aaron Halo
+The header includes a Buy Me a Coffee link. Click the support text, button image, or box to open:
 
-The existing reverse signature lookup remains in MINING MODE.
-
-## KEYBINDS page
-
-A new searchable keybind editor lets you filter by:
-
-- Key
-- Action
-- Phrase
-- Category
-
-Select an action and directly change its keybind.
-
-The PHRASES page remains available for grouped phrase + keybind editing.
-
-
-## GUIDES
-
-Opens the user's YouTube Star Citizen guides playlist.
-
-## ANNOUNCEMENTS
-
-Opens the official Star Citizen Spectrum Announcements forum.
+[buymeacoffee.com/kabutopz](https://buymeacoffee.com/kabutopz)
 
 ## Build
 
-Run:
+### Requirements
 
-`build_exe.bat`
+- Windows 10 or Windows 11
+- Python 3 with `pip`
+- The packages listed in `requirements.txt`
+- An internet link for live ship and mining data
 
-Output:
+The app does not need the third-party `keyboard` or `mouse` hook packages. It sends game input through Windows `SendInput`.
 
-`dist\KabutopzVoiceProtocol\KabutopzVoiceProtocol.exe`
+The project uses these Python packages:
 
-Keep the complete `KabutopzVoiceProtocol` output folder together. The app is
-intentionally built in one-folder mode rather than as a self-extracting
-one-file executable.
+```text
+SpeechRecognition>=3.10.4
+sounddevice>=0.5.0
+pyinstaller>=6.10
+Pillow>=10.0
+```
 
-## Antivirus false-positive reduction
+Save this list as `requirements.txt` in the project folder if that file is not already present.
 
-- Removed the third-party `keyboard` and `mouse` hook packages.
-- Sends configured gameplay inputs through Windows `SendInput` only.
-- Uses PyInstaller one-folder mode instead of a self-extracting one-file overlay.
-- Disables UPX compression.
-- Adds Windows company, product, filename, and version metadata.
-- Generates `SHA256.txt` beside the executable after every successful build.
-- For public distribution, sign every release with the same trusted code-signing identity. A clean build alone cannot guarantee that every antivirus vendor will return zero detections.
+### Install Dependencies
 
-## v7.1 Branding Update
+Open Command Prompt or PowerShell in the project folder. Create a virtual environment so the app's packages stay apart from your main Python setup:
 
-- Windows EXE/taskbar/window icon uses the full Kabutopz logo.
-- Full Kabutopz logo appears on the far left of the header.
-- Love Kabutops graphic appears beside the title.
-- Subtitle is `VERSION 7.1 • POWERED BY CHAT`.
+```bat
+py -m venv .venv
+```
 
-## v7.1 Header Revision
+Start the virtual environment:
 
-- Left header graphic changed to Salute Kabutopz.
-- Love Kabutops remains beside the title.
-- RADIO page removed.
+```bat
+.venv\Scripts\activate
+```
 
-## v7.1 Custom Words + Alt-F4 Update
+Update `pip`, then install the project packages:
 
-- Added `Turn Off Star Citizen` with phrase `turn off star citizen` → `Alt+F4`.
-- Added a new **CUSTOM WORDS** page.
-- Custom Words lets you:
-  - Create an action name.
-  - Pick an existing subcategory or type a new one.
-  - Assign a keybind.
-  - Choose Tap or Hold.
-  - Add multiple phrase rows.
-  - Check/uncheck which phrases are active.
-  - Save the command permanently.
-- Custom actions are merged into normal voice matching and persist between launches.
-- KEYBINDS search now has exact-key mode:
-  - typing `K` only shows actions bound to `K`
-  - typing `I` only shows actions bound to `I`
-  - typing `F12` only shows actions bound to `F12`
-  - typing `alt+f4` only shows actions bound to `Alt+F4`
+```bat
+py -m pip install --upgrade pip
+py -m pip install -r requirements.txt
+```
 
-## Buy Me a Coffee support link
+This installs SpeechRecognition, sounddevice, Pillow, and PyInstaller. The build script uses PyInstaller to make the Windows app.
 
-- Added a boxed Buy Me a Coffee button immediately left of the PAGE selector.
-- The box displays `Support is appreciated!` above the button image.
-- Clicking the text, PNG button, or surrounding box opens `https://buymeacoffee.com/kabutopz` in the default browser.
-- The PNG is bundled into the standalone EXE.
+When you finish, you can leave the virtual environment with:
 
+```bat
+deactivate
+```
 
-## v7.1 Custom Words Manager + Key Filter
+### Create the App
 
-### Custom Words deletion
-Select one of your saved custom commands under **EXISTING CUSTOM COMMANDS**.
+Run this file from the project folder:
 
-- **DELETE SELECTED PHRASE** removes one saved trigger phrase.
-- **DELETE CUSTOM COMMAND** removes the entire custom command.
-- A custom command must keep at least one phrase.
+```bat
+build_exe.bat
+```
 
-### Strict KEYBINDS filter
-The KEYBINDS page now has:
-- **FILTER BY KEYBIND**
-- **SEARCH ALL**
-- **CLEAR**
+Run the build while the virtual environment is active so PyInstaller can include the right packages.
 
-Type `K`, `I`, `F12`, `alt+f4`, etc. and press **FILTER BY KEYBIND**. Only actions whose actual assigned keybind exactly matches the typed key are shown. Phrase text and action names are ignored in this mode.
+The build creates:
 
-### CUSTOM PHRASES group
-The PHRASES page now includes **CUSTOM PHRASES** in the GROUP dropdown. Every command created on the CUSTOM WORDS page appears there automatically.
+```text
+dist\KabutopzVoiceProtocol\KabutopzVoiceProtocol.exe
+```
+
+Keep the full `KabutopzVoiceProtocol` folder together when you run or share the app. The build uses PyInstaller's one-folder mode, so the executable needs the other files in that folder.
+
+The build also creates:
+
+```text
+dist\KabutopzVoiceProtocol\SHA256.txt
+```
+
+Use this file to check that the release files have not changed.
+
+## Release Notes
+
+The Windows build:
+
+- Uses one-folder mode instead of a self-unpacking one-file build.
+- Turns off UPX packing.
+- Includes company, product, file, and version details.
+- Bundles the app icons, logo art, and Buy Me a Coffee image.
+- Creates a SHA-256 hash after each successful build.
+
+These steps can help cut false antivirus alerts, but no clean build can promise zero alerts from every antivirus tool. For public releases, sign each build with the same trusted code-signing certificate.
+
+## Data Notice
+
+Ship and commodity results come from the community-run Star Citizen Wiki API. The data may lag behind game updates, and fields may change without notice.
+
+## Version
+
+Kabutopz Voice Protocol v7.1  
+Powered by the Community <3
