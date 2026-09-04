@@ -1,5 +1,5 @@
 """
-Kabutopz Voice Protocol v7.1
+Kabutopz Voice Protocol v1.0
 
 Star Citizen voice-command/keybind utility.
 Includes Voice Protocol, customization, grouped phrases, editable keybinds,
@@ -38,6 +38,7 @@ from win_input import (
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
+APP_VERSION = "1.0"
 COMMAND_SAMPLE_RATE = 16000
 COMMAND_VOICE_THRESHOLD = 450
 COMMAND_END_SILENCE_SECONDS = 0.45
@@ -443,7 +444,7 @@ class VoiceKeybindApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("Kabutopz Voice Protocol v7.1")
+        self.title(f"Kabutopz Voice Protocol v{APP_VERSION}")
 
         # Kabutopz app/taskbar/window icon.
         try:
@@ -950,7 +951,7 @@ class VoiceKeybindApp(tk.Tk):
 
         subtitle = tk.Label(
             title_block,
-            text="VERSION 7.1 • POWERED BY CHAT",
+            text=f"VERSION {APP_VERSION} • POWERED BY CHAT",
             font=("Segoe UI", 11, "bold"),
             fg=t["accent"],
             bg=t["bg"]

@@ -223,5 +223,7 @@ Ship and commodity results come from the community-run Star Citizen Wiki API. Th
 
 ## Version
 
-Kabutopz Voice Protocol v7.1  
+Kabutopz Voice Protocol v1.0
 Powered by the Community <3
+
+Future releases increment by 0.1: 1.0, 1.1, through 1.9, then 2.0.

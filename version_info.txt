@@ -1,8 +1,8 @@
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(7, 1, 0, 0),
-    prodvers=(7, 1, 0, 0),
+    filevers=(1, 0, 0, 0),
+    prodvers=(1, 0, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -16,12 +16,12 @@ VSVersionInfo(
         '040904B0',
         [StringStruct('CompanyName', 'Kabutopz'),
          StringStruct('FileDescription', 'Kabutopz Voice Protocol'),
-         StringStruct('FileVersion', '7.1.0.0'),
+         StringStruct('FileVersion', '1.0.0.0'),
          StringStruct('InternalName', 'KabutopzVoiceProtocol'),
          StringStruct('LegalCopyright', 'Copyright 2026 Kabutopz'),
          StringStruct('OriginalFilename', 'KabutopzVoiceProtocol.exe'),
          StringStruct('ProductName', 'Kabutopz Voice Protocol'),
-         StringStruct('ProductVersion', '7.1.0.0')])
+         StringStruct('ProductVersion', '1.0.0.0')])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
