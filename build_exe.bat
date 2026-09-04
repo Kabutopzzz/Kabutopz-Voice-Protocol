@@ -1,12 +1,12 @@
 @echo off
 setlocal
-title Kabutopz Voice Protocol v1.0 - EXE Builder
+title Kabutopz Voice Protocol v1.1 - EXE Builder
 cd /d "%~dp0"
 
 set "BUILD_PYTHON=build\.venv\Scripts\python.exe"
 
 echo ==============================================
-echo   KABUTOPZ VOICE PROTOCOL v1.0
+echo   KABUTOPZ VOICE PROTOCOL v1.1
 echo   Clean folder release - no self-extracting overlay
 echo ==============================================
 echo.

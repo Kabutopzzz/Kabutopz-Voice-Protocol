@@ -37,8 +37,8 @@ jobs:
           --add-data "assets/buy_me_a_coffee.png;assets"
           starcitizen_voice_keybinds.py
 
-      - name: Upload Kabutopz Voice Protocol v1.0
+      - name: Upload Kabutopz Voice Protocol v1.1
         uses: actions/upload-artifact@v4
         with:
-          name: KabutopzVoiceProtocol-v1.0-Windows
+          name: KabutopzVoiceProtocol-v1.1-Windows
           path: dist/KabutopzVoiceProtocol

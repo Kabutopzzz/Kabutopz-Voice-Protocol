@@ -1,5 +1,5 @@
 """
-Kabutopz Voice Protocol v1.0
+Kabutopz Voice Protocol v1.1
 
 Star Citizen voice-command/keybind utility.
 Includes Voice Protocol, customization, grouped phrases, editable keybinds,
@@ -10,6 +10,7 @@ import json
 import collections
 import math
 import queue
+import random
 import re
 import subprocess
 import sys
@@ -38,7 +39,7 @@ from win_input import (
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
-APP_VERSION = "1.0"
+APP_VERSION = "1.1"
 COMMAND_SAMPLE_RATE = 16000
 COMMAND_VOICE_THRESHOLD = 450
 COMMAND_END_SILENCE_SECONDS = 0.45
@@ -268,6 +269,22 @@ VOICE_OFF_PHRASES = {
     "computer stop",
     "computer disable",
 }
+
+THANK_YOU_COMPUTER_PHRASES = {
+    "thank you computer",
+    "thanks computer",
+    "thank you robot",
+    "thanks robot",
+}
+
+THANK_YOU_COMPUTER_RESPONSES = (
+    "You're welcome.",
+    "You're welcome, pilot.",
+    "Any time. Happy to help.",
+    "My pleasure. Safe flying.",
+    "Always happy to fly with you.",
+    "Of course. I'm here when you need me.",
+)
 
 # ---------------------------------------------------------------------------
 # Mining signature table from the user-provided reference image.
@@ -3876,9 +3893,20 @@ class VoiceKeybindApp(tk.Tk):
 
                     # Hard voice-off.
                     if normalized in VOICE_OFF_PHRASES:
-                        self._speak("Voice control off.", force=True)
+                        self._speak(
+                            "Command confirmed. Thank you for flying with me.",
+                            force=True,
+                        )
                         self.events.put(("voice_off", ""))
                         break
+
+                    # Acknowledge a polite sign-off without sending a keybind.
+                    thanks_normalized = normalized.replace(",", "")
+                    if thanks_normalized in THANK_YOU_COMPUTER_PHRASES:
+                        response = random.choice(THANK_YOU_COMPUTER_RESPONSES)
+                        self._speak(response, force=True)
+                        self.events.put(("info", f"Computer: {response}"))
+                        continue
 
                     # Reverse mining lookup takes priority over gameplay keybinds.
                     signature = self._extract_signature_question(heard)

@@ -53,6 +53,10 @@ after you stop talking, instead of holding every command for a fixed four
 seconds. Short commands should feel substantially faster. Internet speed and
 Google's speech-recognition response time can still add a small delay.
 
+Saying `computer turn off` confirms the command and adds, “Thank you for
+flying with me.” Saying `thank you computer` (or `thanks computer`) receives a
+random friendly reply.
+
 ### Listening toggle keybind
 
 Under **VOICE PROTOCOL**, set an optional keybind under **VOICE ACTIVATION
@@ -223,7 +227,7 @@ Ship and commodity results come from the community-run Star Citizen Wiki API. Th
 
 ## Version
 
-Kabutopz Voice Protocol v1.0
+Kabutopz Voice Protocol v1.1
 Powered by the Community <3
 
 Future releases increment by 0.1: 1.0, 1.1, through 1.9, then 2.0.
