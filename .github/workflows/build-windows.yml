@@ -6,6 +6,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -37,8 +40,19 @@ jobs:
           --add-data "assets/buy_me_a_coffee.png;assets"
           starcitizen_voice_keybinds.py
 
-      - name: Upload Kabutopz Voice Protocol v1.1
+      - name: Package Windows release
+        shell: pwsh
+        run: Compress-Archive -Path dist/KabutopzVoiceProtocol -DestinationPath dist/KabutopzVoiceProtocol-${{ github.ref_name }}-Windows.zip
+
+      - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KabutopzVoiceProtocol-v1.1-Windows
-          path: dist/KabutopzVoiceProtocol
+          name: KabutopzVoiceProtocol-${{ github.ref_name }}-Windows
+          path: dist/KabutopzVoiceProtocol-${{ github.ref_name }}-Windows.zip
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: dist/KabutopzVoiceProtocol-${{ github.ref_name }}-Windows.zip
