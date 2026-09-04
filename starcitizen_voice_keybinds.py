@@ -7,6 +7,8 @@ mining tools, ship finder, radio, guides, and announcements.
 """
 
 import json
+import collections
+import math
 import queue
 import re
 import subprocess
@@ -24,7 +26,9 @@ import sounddevice as sd
 import speech_recognition as sr
 
 from win_input import (
+    GlobalHotkey,
     hold_keybind,
+    parse_global_hotkey,
     scroll_wheel,
     tap_keybind,
     tap_mouse_combo,
@@ -34,6 +38,11 @@ from win_input import (
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
+COMMAND_SAMPLE_RATE = 16000
+COMMAND_VOICE_THRESHOLD = 450
+COMMAND_END_SILENCE_SECONDS = 0.45
+COMMAND_MAX_CAPTURE_SECONDS = 2.6
+COMMAND_PREROLL_CHUNKS = 8
 
 # ---------------------------------------------------------------------------
 # ACTIONS
@@ -457,6 +466,7 @@ class VoiceKeybindApp(tk.Tk):
         self.selected_device = "__default__"
         self.tts_process = None
         self.tts_lock = threading.Lock()
+        self.voice_toggle_hotkey = None
         self.installed_voices = []
         self.history_watermark_photo = None
         self.header_logo_photo = None
@@ -496,6 +506,10 @@ class VoiceKeybindApp(tk.Tk):
         self._build_guides_page()
         self._build_announcements_page()
 
+        self._configure_voice_toggle_hotkey(
+            self.settings.get("voice_toggle_hotkey", ""),
+            show_error=False,
+        )
         self.refresh_devices()
         self._refresh_tts_voices()
         self.apply_theme()
@@ -516,6 +530,7 @@ class VoiceKeybindApp(tk.Tk):
             "voice_feedback": True,
             "tts_volume": 80,
             "tts_voice": "",
+            "voice_toggle_hotkey": "",
             "keybinds": {},
             "custom_actions": [],
             "phrases": DEFAULT_PHRASES.copy(),
@@ -601,6 +616,10 @@ class VoiceKeybindApp(tk.Tk):
             self.settings["voice_feedback"] = bool(self.voice_feedback_var.get())
             self.settings["tts_volume"] = int(self.tts_volume_var.get())
             self.settings["tts_voice"] = self.tts_voice_var.get()
+            if hasattr(self, "voice_toggle_hotkey_var"):
+                self.settings["voice_toggle_hotkey"] = (
+                    self.voice_toggle_hotkey_var.get().strip().lower()
+                )
             self.settings["phrases"] = self.phrases
             self.settings["keybinds"] = self.keybinds
             self.settings["custom_actions"] = self.custom_actions
@@ -1195,6 +1214,69 @@ class VoiceKeybindApp(tk.Tk):
             ("Segoe UI", 8),
             muted=True,
         ).pack(anchor="w", padx=18, pady=(0, 10))
+
+        self._label(
+            control,
+            "VOICE ACTIVATION TOGGLE KEYBIND (OPTIONAL)",
+            ("Segoe UI", 8, "bold"),
+            muted=True,
+        ).pack(anchor="w", padx=18, pady=(0, 5))
+
+        self.voice_toggle_hotkey_var = tk.StringVar(
+            value=str(self.settings.get("voice_toggle_hotkey", "")).strip()
+        )
+        hotkey_row = self._track(
+            tk.Frame(control, bg=t["panel"]), "panel"
+        )
+        hotkey_row.pack(fill="x", padx=18, pady=(0, 5))
+
+        self.voice_toggle_hotkey_entry = tk.Entry(
+            hotkey_row,
+            textvariable=self.voice_toggle_hotkey_var,
+            bg=t["panel2"], fg=t["text"],
+            insertbackground=t["text"],
+            relief="flat", bd=0,
+            font=("Cascadia Mono", 9),
+        )
+        self.voice_toggle_hotkey_entry.pack(
+            side="left", fill="x", expand=True, ipady=7
+        )
+        self.voice_toggle_hotkey_entry.bind(
+            "<Return>", lambda _: self._save_voice_toggle_hotkey()
+        )
+
+        save_hotkey = tk.Button(
+            hotkey_row,
+            text="SAVE",
+            command=self._save_voice_toggle_hotkey,
+            bg=t["accent"], fg=self._accent_text_color(t["accent"]),
+            activebackground=t["accent"],
+            activeforeground=self._accent_text_color(t["accent"]),
+            relief="flat", bd=0,
+            font=("Segoe UI", 8, "bold"), padx=10, pady=7,
+        )
+        save_hotkey.pack(side="left", padx=(8, 0))
+
+        clear_hotkey = tk.Button(
+            hotkey_row,
+            text="CLEAR",
+            command=self._clear_voice_toggle_hotkey,
+            bg=t["panel2"], fg=t["text"],
+            activebackground=t["border"], activeforeground=t["text"],
+            relief="flat", bd=0,
+            font=("Segoe UI", 8, "bold"), padx=9, pady=7,
+        )
+        clear_hotkey.pack(side="left", padx=(6, 0))
+
+        self.voice_toggle_hotkey_status = self._label(
+            control,
+            "Leave blank to disable the keybind. Example: F8 or Ctrl+Shift+V.",
+            ("Segoe UI", 8),
+            muted=True,
+        )
+        self.voice_toggle_hotkey_status.pack(
+            anchor="w", padx=18, pady=(0, 10)
+        )
 
         self._label(
             control, "RECORDING DEVICE",
@@ -3363,6 +3445,83 @@ class VoiceKeybindApp(tk.Tk):
                 activeforeground=accent_text,
             )
 
+    def _set_voice_toggle_hotkey_status(self, text):
+        if hasattr(self, "voice_toggle_hotkey_status"):
+            self.voice_toggle_hotkey_status.configure(text=text)
+
+    def _configure_voice_toggle_hotkey(self, keybind, show_error=True):
+        """Register the optional global listen on/off key without hooks."""
+        requested = str(keybind or "").strip().lower()
+
+        if not requested:
+            if self.voice_toggle_hotkey is not None:
+                self.voice_toggle_hotkey.stop()
+                self.voice_toggle_hotkey = None
+            if hasattr(self, "voice_toggle_hotkey_var"):
+                self.voice_toggle_hotkey_var.set("")
+            self._set_voice_toggle_hotkey_status(
+                "Leave blank to disable the keybind. Example: F8 or Ctrl+Shift+V."
+            )
+            self._save_settings()
+            return True
+
+        try:
+            parse_global_hotkey(requested)
+        except ValueError as exc:
+            if show_error:
+                messagebox.showerror("Voice Toggle Keybind", str(exc))
+            self._set_voice_toggle_hotkey_status(f"Invalid keybind: {exc}")
+            return False
+
+        if (
+            self.voice_toggle_hotkey is not None
+            and self.voice_toggle_hotkey.keybind == requested
+        ):
+            self.voice_toggle_hotkey_var.set(requested)
+            self._set_voice_toggle_hotkey_status(
+                f"{requested.upper()} toggles listening on and off."
+            )
+            self._save_settings()
+            return True
+
+        old_hotkey = self.voice_toggle_hotkey
+        if old_hotkey is not None:
+            old_hotkey.stop()
+            self.voice_toggle_hotkey = None
+
+        try:
+            listener = GlobalHotkey(
+                requested,
+                lambda: self.events.put(("voice_toggle_hotkey", requested)),
+            )
+            listener.start()
+        except Exception as exc:
+            message = (
+                f'Could not register "{requested}". It may already be used by '
+                "Windows, Star Citizen, or another app."
+            )
+            if show_error:
+                messagebox.showerror("Voice Toggle Keybind", message)
+            self._set_voice_toggle_hotkey_status(message)
+            return False
+
+        self.voice_toggle_hotkey = listener
+        self.voice_toggle_hotkey_var.set(requested)
+        self._set_voice_toggle_hotkey_status(
+            f"{requested.upper()} toggles listening on and off."
+        )
+        self._save_settings()
+        return True
+
+    def _save_voice_toggle_hotkey(self):
+        self._configure_voice_toggle_hotkey(
+            self.voice_toggle_hotkey_var.get(),
+            show_error=True,
+        )
+
+    def _clear_voice_toggle_hotkey(self):
+        self._configure_voice_toggle_hotkey("", show_error=False)
+
     # -------------------- voice control --------------------
     def toggle_listening(self):
         if self.running:
@@ -3587,9 +3746,17 @@ class VoiceKeybindApp(tk.Tk):
         pairs.sort(key=lambda x: len(x[0]), reverse=True)
         return pairs
 
+    @staticmethod
+    def _audio_level(raw_audio):
+        """Return an RMS-like level for 16-bit microphone samples."""
+        samples = memoryview(raw_audio).cast("h")
+        if not samples:
+            return 0
+        mean_square = sum(sample * sample for sample in samples) // len(samples)
+        return math.isqrt(mean_square)
+
     def _listen_loop(self):
-        sample_rate = 16000
-        audio_q = queue.Queue()
+        audio_q = queue.Queue(maxsize=300)
 
         def callback(indata, frames, time_info, status):
             if status:
@@ -3597,7 +3764,12 @@ class VoiceKeybindApp(tk.Tk):
                     "info",
                     f"Audio status: {status}",
                 ))
-            audio_q.put(bytes(indata))
+            try:
+                audio_q.put_nowait(bytes(indata))
+            except queue.Full:
+                # Recognition happens off the audio callback. Discarding stale
+                # samples keeps a slow network result from adding extra lag.
+                pass
 
         try:
             stream_device = (
@@ -3607,7 +3779,7 @@ class VoiceKeybindApp(tk.Tk):
             )
 
             with sd.RawInputStream(
-                samplerate=sample_rate,
+                samplerate=COMMAND_SAMPLE_RATE,
                 blocksize=0,
                 device=stream_device,
                 channels=1,
@@ -3621,27 +3793,62 @@ class VoiceKeybindApp(tk.Tk):
 
                 while self.running:
                     chunks = []
-                    deadline = time.monotonic() + 4
+                    preroll = collections.deque(
+                        maxlen=COMMAND_PREROLL_CHUNKS
+                    )
+                    speech_started_at = None
+                    last_voice_at = None
 
-                    while (
-                        self.running
-                        and time.monotonic() < deadline
-                    ):
+                    # Wait for actual speech, then finish soon after the user
+                    # stops talking instead of always recording a fixed 4s.
+                    while self.running:
                         try:
-                            chunks.append(
-                                audio_q.get(timeout=0.25)
-                            )
+                            chunk = audio_q.get(timeout=0.10)
                         except queue.Empty:
-                            pass
+                            continue
+
+                        now = time.monotonic()
+                        level = self._audio_level(chunk)
+
+                        if speech_started_at is None:
+                            preroll.append(chunk)
+                            if level >= COMMAND_VOICE_THRESHOLD:
+                                speech_started_at = now
+                                last_voice_at = now
+                                chunks = list(preroll)
+                            continue
+
+                        chunks.append(chunk)
+                        if level >= COMMAND_VOICE_THRESHOLD:
+                            last_voice_at = now
+
+                        if (
+                            now - last_voice_at
+                            >= COMMAND_END_SILENCE_SECONDS
+                        ):
+                            break
+                        if (
+                            now - speech_started_at
+                            >= COMMAND_MAX_CAPTURE_SECONDS
+                        ):
+                            break
 
                     if not self.running or not chunks:
                         continue
 
                     audio = sr.AudioData(
                         b"".join(chunks),
-                        sample_rate,
+                        COMMAND_SAMPLE_RATE,
                         2,
                     )
+
+                    # Do not process audio captured while the recognition API
+                    # was responding; it would make the next command feel late.
+                    while True:
+                        try:
+                            audio_q.get_nowait()
+                        except queue.Empty:
+                            break
 
                     try:
                         heard = self.recognizer.recognize_google(
@@ -3811,6 +4018,15 @@ class VoiceKeybindApp(tk.Tk):
                     self._history_add(
                         'Voice command "computer turn off" stopped listening.'
                     )
+                elif kind == "voice_toggle_hotkey":
+                    if (
+                        hasattr(self, "voice_toggle_hotkey_var")
+                        and value == self.voice_toggle_hotkey_var.get().strip().lower()
+                    ):
+                        self.toggle_listening()
+                        self._history_add(
+                            f"Listening toggled by keybind: {value.upper()}."
+                        )
                 elif kind == "worker_done":
                     if self.running:
                         self.running = False
@@ -3893,6 +4109,9 @@ class VoiceKeybindApp(tk.Tk):
 
     def on_close(self):
         self.running = False
+        if self.voice_toggle_hotkey is not None:
+            self.voice_toggle_hotkey.stop()
+            self.voice_toggle_hotkey = None
         self._stop_tts()
         self._save_settings()
         self.destroy()

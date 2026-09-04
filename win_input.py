@@ -7,6 +7,7 @@ only needs to send configured commands to the foreground game window.
 
 import ctypes
 import re
+import threading
 import time
 from ctypes import wintypes
 
@@ -175,6 +176,40 @@ _user32.SendInput.argtypes = (
 _user32.SendInput.restype = wintypes.UINT
 _user32.MapVirtualKeyW.argtypes = (wintypes.UINT, wintypes.UINT)
 _user32.MapVirtualKeyW.restype = wintypes.UINT
+_user32.RegisterHotKey.argtypes = (
+    wintypes.HWND,
+    ctypes.c_int,
+    wintypes.UINT,
+    wintypes.UINT,
+)
+_user32.RegisterHotKey.restype = wintypes.BOOL
+_user32.UnregisterHotKey.argtypes = (wintypes.HWND, ctypes.c_int)
+_user32.UnregisterHotKey.restype = wintypes.BOOL
+_user32.GetMessageW.argtypes = (
+    ctypes.POINTER(wintypes.MSG),
+    wintypes.HWND,
+    wintypes.UINT,
+    wintypes.UINT,
+)
+_user32.GetMessageW.restype = ctypes.c_int
+
+_kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+_kernel32.GetCurrentThreadId.restype = wintypes.DWORD
+_user32.PostThreadMessageW.argtypes = (
+    wintypes.DWORD,
+    wintypes.UINT,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+)
+_user32.PostThreadMessageW.restype = wintypes.BOOL
+
+MOD_ALT = 0x0001
+MOD_CONTROL = 0x0002
+MOD_SHIFT = 0x0004
+MOD_WIN = 0x0008
+MOD_NOREPEAT = 0x4000
+WM_HOTKEY = 0x0312
+WM_QUIT = 0x0012
 
 
 def _normalize_key_name(name):
@@ -240,6 +275,102 @@ def _key_parts(keybind):
     for part in parts:
         resolve_key(part)
     return parts
+
+
+def parse_global_hotkey(keybind):
+    """Translate a keybind like ``ctrl+shift+f8`` for RegisterHotKey."""
+    parts = _key_parts(keybind)
+    modifiers = 0
+    modifier_keys = {
+        "alt": MOD_ALT,
+        "left alt": MOD_ALT,
+        "right alt": MOD_ALT,
+        "ctrl": MOD_CONTROL,
+        "control": MOD_CONTROL,
+        "left ctrl": MOD_CONTROL,
+        "right ctrl": MOD_CONTROL,
+        "left control": MOD_CONTROL,
+        "right control": MOD_CONTROL,
+        "shift": MOD_SHIFT,
+        "left shift": MOD_SHIFT,
+        "right shift": MOD_SHIFT,
+        "left windows": MOD_WIN,
+        "right windows": MOD_WIN,
+    }
+
+    main_keys = []
+    for part in parts:
+        if part in modifier_keys:
+            modifiers |= modifier_keys[part]
+        else:
+            main_keys.append(part)
+
+    if len(main_keys) != 1:
+        raise ValueError(
+            "Use one main key, for example F8 or Ctrl+Shift+V."
+        )
+
+    virtual_key, _ = resolve_key(main_keys[0])
+    return modifiers | MOD_NOREPEAT, virtual_key
+
+
+class GlobalHotkey:
+    """A small global Windows hotkey listener with no keyboard hook."""
+
+    _HOTKEY_ID = 0x4B56
+
+    def __init__(self, keybind, callback):
+        self.keybind = str(keybind).strip().lower()
+        self.callback = callback
+        self.modifiers, self.virtual_key = parse_global_hotkey(self.keybind)
+        self._thread = None
+        self._thread_id = None
+        self._ready = threading.Event()
+        self._stopped = threading.Event()
+        self._error = None
+
+    def start(self):
+        if self._thread is not None:
+            return
+        self._thread = threading.Thread(
+            target=self._run,
+            name="KabutopzVoiceToggleHotkey",
+            daemon=True,
+        )
+        self._thread.start()
+        if not self._ready.wait(timeout=1.5):
+            raise RuntimeError("Timed out while registering the toggle keybind.")
+        if self._error is not None:
+            raise self._error
+
+    def _run(self):
+        try:
+            self._thread_id = _kernel32.GetCurrentThreadId()
+            if not _user32.RegisterHotKey(
+                None,
+                self._HOTKEY_ID,
+                self.modifiers,
+                self.virtual_key,
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+            self._ready.set()
+
+            message = wintypes.MSG()
+            while _user32.GetMessageW(ctypes.byref(message), None, 0, 0) > 0:
+                if message.message == WM_HOTKEY:
+                    self.callback()
+        except Exception as exc:
+            self._error = exc
+            self._ready.set()
+        finally:
+            if self._thread_id is not None:
+                _user32.UnregisterHotKey(None, self._HOTKEY_ID)
+            self._stopped.set()
+
+    def stop(self):
+        if self._thread_id is not None:
+            _user32.PostThreadMessageW(self._thread_id, WM_QUIT, 0, 0)
+        self._stopped.wait(timeout=1.0)
 
 
 def press_keybind(keybind):

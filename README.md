@@ -9,6 +9,8 @@ This is an accessibility tool.
 ## Features
 
 - Voice commands for common *Star Citizen* actions
+- Faster voice-activity capture that submits a command shortly after you stop speaking
+- Optional global keybind to toggle listening on and off
 - Editable phrases and keybinds
 - Custom commands with one or more trigger phrases
 - Tap and Hold input modes
@@ -43,6 +45,24 @@ turn off star citizen
 ```
 
 This command sends `Alt+F4`.
+
+### Faster recognition
+
+The microphone now waits for speech and submits the audio about 0.45 seconds
+after you stop talking, instead of holding every command for a fixed four
+seconds. Short commands should feel substantially faster. Internet speed and
+Google's speech-recognition response time can still add a small delay.
+
+### Listening toggle keybind
+
+Under **VOICE PROTOCOL**, set an optional keybind under **VOICE ACTIVATION
+TOGGLE KEYBIND**. It works globally, so it can turn listening on or off while
+*Star Citizen* has focus.
+
+Examples: `F8`, `Ctrl+Shift+V`, or `Alt+F10`.
+
+It is blank by default. Leave it blank or use **CLEAR** to disable the toggle.
+If Windows reports that a chosen key is already in use, choose another one.
 
 ## Custom Words
 
