@@ -27,7 +27,7 @@ jobs:
 
       - name: Build EXE
         run: >
-          python -m PyInstaller --noconfirm --clean --onedir --noupx
+          python -m PyInstaller --noconfirm --clean --onedir --noupx --uac-admin
           --contents-directory _internal --name KabutopzVoiceProtocol --windowed
           --version-file version_info.txt --icon assets/kabutopz_app_icon.ico
           --exclude-module torch --exclude-module whisper --exclude-module faster_whisper

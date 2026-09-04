@@ -1,5 +1,5 @@
 """
-Kabutopz Voice Protocol v1.1
+Kabutopz Voice Protocol v1.2
 
 Star Citizen voice-command/keybind utility.
 Includes Voice Protocol, customization, grouped phrases, editable keybinds,
@@ -13,7 +13,6 @@ import queue
 import random
 import re
 import subprocess
-import sys
 import threading
 import time
 import urllib.parse
@@ -34,17 +33,26 @@ from win_input import (
     tap_keybind,
     tap_mouse_combo,
 )
+from app_paths import resource_path
+from commodity_service import search_commodity, suggest_commodities
+from component_service import search_component, suggest_components
+from keybind_modifiers import apply_modifiers, modifier_state
 
 
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
-APP_VERSION = "1.1"
+APP_VERSION = "1.2"
 COMMAND_SAMPLE_RATE = 16000
 COMMAND_VOICE_THRESHOLD = 450
 COMMAND_END_SILENCE_SECONDS = 0.45
 COMMAND_MAX_CAPTURE_SECONDS = 2.6
 COMMAND_PREROLL_CHUNKS = 8
+PAGE_ORDER = (
+    "VOICE PROTOCOL", "HOW TO", "CUSTOMIZE", "PHRASES", "KEYBINDS",
+    "CUSTOM WORDS", "COMPONENTS", "COMMODITIES", "MINING MODE", "SHIP FINDER",
+    "GUIDES", "ANNOUNCEMENTS", "CREDIT",
+)
 
 # ---------------------------------------------------------------------------
 # ACTIONS
@@ -447,14 +455,6 @@ THEME_PRESETS = {
 LEGACY_DEFAULT_THEME = THEME_PRESETS["Midnight Blue"].copy()
 DEFAULT_THEME = THEME_PRESETS["Industrial Orange"].copy()
 
-
-
-def resource_path(relative_path):
-    """Return a path that works both from source and from a PyInstaller EXE."""
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    return base / relative_path
-
-
 class VoiceKeybindApp(tk.Tk):
     RED = "#ff5d6c"
 
@@ -515,6 +515,9 @@ class VoiceKeybindApp(tk.Tk):
 
         self._build_shell()
         self._build_voice_page()
+        self._build_how_to_page()
+        self._build_components_page()
+        self._build_commodities_page()
         self._build_customize_page()
         self._build_phrases_page()
         self._build_custom_words_page()
@@ -523,6 +526,7 @@ class VoiceKeybindApp(tk.Tk):
         self._build_ship_finder_page()
         self._build_guides_page()
         self._build_announcements_page()
+        self._build_credit_page()
 
         self._configure_voice_toggle_hotkey(
             self.settings.get("voice_toggle_hotkey", ""),
@@ -897,6 +901,8 @@ class VoiceKeybindApp(tk.Tk):
 
         if hasattr(self, "history_watermark"):
             self.after(20, self._refresh_history_watermark)
+        if hasattr(self, "page_var"):
+            self._update_page_tabs(self.page_var.get())
         self._save_settings()
 
     def _choose_color(self, key, label):
@@ -1070,7 +1076,7 @@ class VoiceKeybindApp(tk.Tk):
         self.page_combo = ttk.Combobox(
             nav,
             textvariable=self.page_var,
-            values=["VOICE PROTOCOL", "CUSTOMIZE", "PHRASES", "CUSTOM WORDS", "KEYBINDS", "MINING MODE", "SHIP FINDER", "GUIDES", "ANNOUNCEMENTS"],
+            values=PAGE_ORDER,
             state="readonly",
             style="Dark.TCombobox",
             width=24,
@@ -1081,6 +1087,35 @@ class VoiceKeybindApp(tk.Tk):
             lambda e: self.show_page(self.page_var.get())
         )
 
+        page_tabs = self._track(tk.Frame(self, bg=t["bg"]), "bg")
+        page_tabs.pack(fill="x", padx=28, pady=(0, 6))
+        self.page_tab_buttons = {}
+        tab_labels = {
+            "VOICE PROTOCOL": "VOICE",
+            "HOW TO": "HOW TO",
+            "CUSTOMIZE": "CUSTOMIZE",
+            "PHRASES": "PHRASES",
+            "KEYBINDS": "KEYBINDS",
+            "CUSTOM WORDS": "CUSTOM WORDS",
+            "COMMODITIES": "COMMODITIES",
+            "COMPONENTS": "COMPONENTS",
+            "MINING MODE": "MINING",
+            "SHIP FINDER": "SHIP FINDER",
+            "GUIDES": "GUIDES",
+            "ANNOUNCEMENTS": "NEWS",
+            "CREDIT": "CREDIT",
+        }
+        for page_name in PAGE_ORDER:
+            tab = tk.Button(
+                page_tabs, text=tab_labels[page_name],
+                command=lambda name=page_name: self.show_page(name),
+                bg=t["panel2"], fg=t["text"],
+                activebackground=t["border"], activeforeground=t["text"],
+                relief="flat", bd=0, font=("Segoe UI", 8, "bold"), padx=8, pady=7,
+            )
+            tab.pack(side="left", padx=(0, 4), pady=2)
+            self.page_tab_buttons[page_name] = tab
+
         self.page_host = self._track(tk.Frame(self, bg=t["bg"]), "bg")
         self.page_host.pack(fill="both", expand=True, padx=28, pady=(4, 24))
 
@@ -1088,8 +1123,14 @@ class VoiceKeybindApp(tk.Tk):
         webbrowser.open_new_tab(BUY_ME_A_COFFEE_URL)
 
     def show_page(self, name):
+        if name not in PAGE_ORDER:
+            name = "VOICE PROTOCOL"
+        self.page_var.set(name)
         for page in (
             self.voice_page,
+            self.how_to_page,
+            self.components_page,
+            self.commodities_page,
             self.customize_page,
             self.phrases_page,
             self.custom_words_page,
@@ -1098,10 +1139,14 @@ class VoiceKeybindApp(tk.Tk):
             self.ship_finder_page,
             self.guides_page,
             self.announcements_page,
+            self.credit_page,
         ):
             page.pack_forget()
 
         pages = {
+            "HOW TO": self.how_to_page,
+            "COMPONENTS": self.components_page,
+            "COMMODITIES": self.commodities_page,
             "CUSTOMIZE": self.customize_page,
             "PHRASES": self.phrases_page,
             "CUSTOM WORDS": self.custom_words_page,
@@ -1110,8 +1155,26 @@ class VoiceKeybindApp(tk.Tk):
             "SHIP FINDER": self.ship_finder_page,
             "GUIDES": self.guides_page,
             "ANNOUNCEMENTS": self.announcements_page,
+            "CREDIT": self.credit_page,
         }
         pages.get(name, self.voice_page).pack(fill="both", expand=True)
+        self._update_page_tabs(name)
+
+    def _update_page_tabs(self, selected):
+        if not hasattr(self, "page_tab_buttons"):
+            return
+        accent_text = self._accent_text_color(self.theme["accent"])
+        for page_name, tab in self.page_tab_buttons.items():
+            if page_name == selected:
+                tab.configure(
+                    bg=self.theme["accent"], fg=accent_text,
+                    activebackground=self.theme["accent"], activeforeground=accent_text,
+                )
+            else:
+                tab.configure(
+                    bg=self.theme["panel2"], fg=self.theme["text"],
+                    activebackground=self.theme["border"], activeforeground=self.theme["text"],
+                )
 
 
     def _panel(self, parent):
@@ -1460,6 +1523,307 @@ class VoiceKeybindApp(tk.Tk):
         )
         self._refresh_command_list()
 
+    # -------------------- How To page --------------------
+    def _build_how_to_page(self):
+        t = self.theme
+        self.how_to_page = self._track(
+            tk.Frame(self.page_host, bg=t["bg"]), "bg"
+        )
+
+        panel = self._panel(self.how_to_page)
+        panel.pack(fill="both", expand=True)
+
+        inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
+        inner.pack(fill="both", expand=True, padx=28, pady=24)
+
+        self._label(inner, "HOW TO", ("Segoe UI", 18, "bold")).pack(anchor="w")
+        self._label(
+            inner,
+            "A quick guide to listening, commands, mining-resource questions, and custom phrases.",
+            ("Segoe UI", 9), muted=True,
+        ).pack(anchor="w", pady=(4, 16))
+
+        guide = tk.Text(
+            inner,
+            bg=t["panel2"], fg=t["text"], insertbackground=t["text"],
+            relief="flat", bd=0, wrap="word", padx=18, pady=16,
+            font=("Segoe UI", 10), state="normal",
+        )
+        guide.pack(side="left", fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(inner, command=guide.yview)
+        scrollbar.pack(side="right", fill="y")
+        guide.configure(yscrollcommand=scrollbar.set)
+
+        guide.insert(
+            "1.0",
+            "START HERE\n"
+            "1. Run Kabutopz Voice Protocol as Administrator. This lets Windows send your configured keys reliably to the game.\n"
+            "2. In VOICE PROTOCOL, choose your microphone and click START LISTENING. The status changes to LISTENING.\n"
+            "3. Speak a saved phrase clearly while Star Citizen is the active window. Click STOP LISTENING when you are done, or set an optional voice-toggle hotkey.\n\n"
+            "EXAMPLE COMMANDS\n"
+            "• Say “ship on” to use the Ship Power On action.\n"
+            "• Say “contact ATC” to use the ATC contact action.\n"
+            "• Other examples include “engines on”, “landing gear”, “quantum engage”, and “power to shields”.\n"
+            "The exact in-game key sent for each command is shown and editable in PHRASES and KEYBINDS. Match those keys to your Star Citizen keybind settings.\n\n"
+            "MINING RESOURCES AND SIGNATURES\n"
+            "Ask naturally while listening to look up the mining signature table. For example: “which resource signature is iron?”, “what resource is 4,270?”, or “what mineral is signature 8,550?”\n"
+            "You can also ask where a resource is found, such as “where can I mine iron?” The MINING MODE page provides the same signature reference and manual lookup tools.\n\n"
+            "CUSTOM WORD PHRASES\n"
+            "Open CUSTOM WORDS to create a personal voice action. Give it a name, choose a category, enter the in-game keybind, choose Tap or Hold, then add one or more phrases and create the command.\n"
+            "Use PHRASES to edit the wording or keybind for any existing action. Your custom commands appear under CUSTOM PHRASES and in the KEYBINDS page.\n\n"
+            "MODIFIER KEYBINDS\n"
+            "Every custom keybind field accepts combinations such as ctrl+k, ctrl+shift+v, or left alt+shift+n. Use the CTRL, ALT, and SHIFT controls beside a keybind field, then choose Standard, Left, or Right variants.\n"
+            "For a normal keybind, leave every modifier unchecked."
+        )
+        guide.configure(state="disabled")
+        self.how_to_guide = guide
+
+    # -------------------- Components page --------------------
+    def _build_components_page(self):
+        t = self.theme
+        self.components_page = self._track(tk.Frame(self.page_host, bg=t["bg"]), "bg")
+        panel = self._panel(self.components_page)
+        panel.pack(fill="both", expand=True)
+        inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
+        inner.pack(fill="both", expand=True, padx=28, pady=24)
+        self._label(inner, "COMPONENTS", ("Segoe UI", 18, "bold")).pack(anchor="w")
+        self._label(inner, "Search CStone Finder for components, listed prices, locations, and specifications.", ("Segoe UI", 9), muted=True).pack(anchor="w", pady=(4, 16))
+        row = self._track(tk.Frame(inner, bg=t["panel"]), "panel")
+        row.pack(fill="x")
+        self.component_search_var = tk.StringVar()
+        entry = tk.Entry(row, textvariable=self.component_search_var, bg=t["panel2"], fg=t["text"], insertbackground=t["text"], relief="flat", bd=0, font=("Cascadia Mono", 10))
+        entry.pack(side="left", fill="x", expand=True, ipady=8)
+        entry.bind("<Return>", lambda _: self._search_component())
+        entry.bind("<KeyRelease>", self._component_search_typed)
+        tk.Button(row, text="SEARCH CSTONE", command=self._search_component, bg=t["accent"], fg="#07111c", activebackground=t["accent"], activeforeground="#07111c", relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=16, pady=8).pack(side="left", padx=(10, 0))
+        self.component_suggestions = tk.Listbox(inner, height=5, bg=t["panel2"], fg=t["text"], selectbackground=t["border"], selectforeground=t["text"], relief="flat", bd=0, font=("Cascadia Mono", 9), activestyle="none")
+        self.component_suggestions.bind("<<ListboxSelect>>", self._component_suggestion_selected)
+        self.component_suggestions.pack_forget()
+        self.component_suggestion_after = None
+        self.component_status = self._label(inner, "Type a component name, for example Atlas, FR-76, or Mantis.", ("Segoe UI", 8), muted=True)
+        self.component_status.pack(anchor="w", pady=(8, 8))
+        frame = self._track(tk.Frame(inner, bg=t["panel2"]), "panel2")
+        frame.pack(fill="both", expand=True)
+        self.component_results = tk.Text(frame, bg=t["panel2"], fg=t["text"], relief="flat", bd=0, wrap="none", padx=12, pady=10, font=("Cascadia Mono", 9), state="disabled")
+        self.component_results.pack(side="left", fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(frame, command=self.component_results.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.component_results.configure(yscrollcommand=scrollbar.set)
+
+    def _component_search_typed(self, *_):
+        query = self.component_search_var.get().strip()
+        if self.component_suggestion_after is not None:
+            self.after_cancel(self.component_suggestion_after)
+        if not query:
+            self.component_suggestions.pack_forget()
+            return
+        self.component_suggestion_after = self.after(250, lambda: threading.Thread(target=self._component_suggestions_worker, args=(query,), daemon=True).start())
+
+    def _component_suggestions_worker(self, query):
+        try:
+            self.events.put(("component_suggestions", (query, suggest_components(query))))
+        except Exception:
+            self.events.put(("component_suggestions", (query, [])))
+
+    def _display_component_suggestions(self, query, suggestions):
+        if query != self.component_search_var.get().strip():
+            return
+        self.component_suggestions.delete(0, tk.END)
+        for suggestion in suggestions:
+            self.component_suggestions.insert(tk.END, suggestion)
+        if suggestions:
+            self.component_suggestions.pack(fill="x", pady=(5, 0), before=self.component_status)
+        else:
+            self.component_suggestions.pack_forget()
+
+    def _component_suggestion_selected(self, *_):
+        selected = self.component_suggestions.curselection()
+        if selected:
+            self.component_search_var.set(self.component_suggestions.get(selected[0]))
+            self.component_suggestions.pack_forget()
+            self._search_component()
+
+    def _search_component(self):
+        query = self.component_search_var.get().strip()
+        if not query:
+            self.component_status.configure(text="Enter a component name first.")
+            return
+        self.component_status.configure(text="Searching CStone live data…")
+        threading.Thread(target=self._component_search_worker, args=(query,), daemon=True).start()
+
+    def _component_search_worker(self, query):
+        try:
+            self.events.put(("component_results", search_component(query)))
+        except Exception as exc:
+            self.events.put(("component_error", str(exc)))
+
+    def _display_component_results(self, result):
+        lines = [f"{result.name.upper()} — LIVE CSTONE FINDER DATA", f"Source: {result.source_url}", "", "BUY LOCATIONS"]
+        lines.extend(f"  {location:<50} {price:>12} UEC   {verified}" for location, price, verified in result.locations)
+        lines.extend(["", "SPECIFICATIONS"])
+        lines.extend(f"  {label}: {value}" for label, value in result.specifications)
+        if not result.locations:
+            lines.append("  No current CStone shop locations were listed for this item.")
+        self.component_results.configure(state="normal")
+        self.component_results.delete("1.0", tk.END)
+        self.component_results.insert("1.0", "\n".join(lines))
+        self.component_results.configure(state="disabled")
+        self.component_status.configure(text=f"Loaded {len(result.locations)} listed location(s) from CStone Finder.")
+
+    # -------------------- Commodities page --------------------
+    def _build_commodities_page(self):
+        t = self.theme
+        self.commodities_page = self._track(
+            tk.Frame(self.page_host, bg=t["bg"]), "bg"
+        )
+        panel = self._panel(self.commodities_page)
+        panel.pack(fill="both", expand=True)
+        inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
+        inner.pack(fill="both", expand=True, padx=28, pady=24)
+
+        self._label(inner, "COMMODITIES", ("Segoe UI", 18, "bold")).pack(anchor="w")
+        self._label(
+            inner,
+            "Search UEX for current per-SCU prices and every listed terminal that offers or demands a commodity.",
+            ("Segoe UI", 9), muted=True,
+        ).pack(anchor="w", pady=(4, 16))
+
+        search_row = self._track(tk.Frame(inner, bg=t["panel"]), "panel")
+        search_row.pack(fill="x")
+        self.commodity_search_var = tk.StringVar()
+        self.commodity_search_entry = tk.Entry(
+            search_row, textvariable=self.commodity_search_var,
+            bg=t["panel2"], fg=t["text"], insertbackground=t["text"],
+            relief="flat", bd=0, font=("Cascadia Mono", 10),
+        )
+        self.commodity_search_entry.pack(side="left", fill="x", expand=True, ipady=8)
+        self.commodity_search_entry.bind("<Return>", lambda _: self._search_commodity())
+        self.commodity_search_entry.bind("<KeyRelease>", self._commodity_search_typed)
+        search_button = tk.Button(
+            search_row, text="SEARCH UEX", command=self._search_commodity,
+            bg=t["accent"], fg="#07111c", activebackground=t["accent"],
+            activeforeground="#07111c", relief="flat", bd=0,
+            font=("Segoe UI", 9, "bold"), padx=16, pady=8,
+        )
+        search_button.pack(side="left", padx=(10, 0))
+
+        self.commodity_suggestion_list = tk.Listbox(
+            inner, height=5,
+            bg=t["panel2"], fg=t["text"], selectbackground=t["border"],
+            selectforeground=t["text"], relief="flat", bd=0,
+            font=("Cascadia Mono", 9), activestyle="none",
+        )
+        self.commodity_suggestion_list.bind(
+            "<<ListboxSelect>>", self._commodity_suggestion_selected
+        )
+        self.commodity_suggestion_list.pack_forget()
+        self.commodity_suggestion_after = None
+
+        self.commodity_status = self._label(
+            inner, "Enter a commodity name, for example Iron, Laranite, or Medical Supplies.",
+            ("Segoe UI", 8), muted=True,
+        )
+        self.commodity_status.pack(anchor="w", pady=(8, 8))
+
+        result_frame = self._track(tk.Frame(inner, bg=t["panel2"]), "panel2")
+        result_frame.pack(fill="both", expand=True)
+        self.commodity_results = tk.Text(
+            result_frame, bg=t["panel2"], fg=t["text"], insertbackground=t["text"],
+            relief="flat", bd=0, wrap="none", padx=12, pady=10,
+            font=("Cascadia Mono", 9), state="disabled",
+        )
+        self.commodity_results.pack(side="left", fill="both", expand=True)
+        result_scroll = ttk.Scrollbar(result_frame, command=self.commodity_results.yview)
+        result_scroll.pack(side="right", fill="y")
+        self.commodity_results.configure(yscrollcommand=result_scroll.set)
+
+    def _search_commodity(self):
+        query = self.commodity_search_var.get().strip()
+        if not query:
+            self.commodity_status.configure(text="Enter a commodity name first.")
+            return
+        self.commodity_status.configure(text="Searching UEX live data…")
+        threading.Thread(
+            target=self._commodity_search_worker,
+            args=(query,), name="UEXCommoditySearch", daemon=True,
+        ).start()
+
+    def _commodity_search_typed(self, *_):
+        query = self.commodity_search_var.get().strip()
+        if self.commodity_suggestion_after is not None:
+            self.after_cancel(self.commodity_suggestion_after)
+            self.commodity_suggestion_after = None
+        if not query:
+            self.commodity_suggestion_list.pack_forget()
+            return
+        self.commodity_suggestion_after = self.after(
+            250, lambda: self._load_commodity_suggestions(query)
+        )
+
+    def _load_commodity_suggestions(self, query):
+        self.commodity_suggestion_after = None
+        threading.Thread(
+            target=self._commodity_suggestions_worker,
+            args=(query,), name="UEXCommoditySuggestions", daemon=True,
+        ).start()
+
+    def _commodity_suggestions_worker(self, query):
+        try:
+            self.events.put(("commodity_suggestions", (query, suggest_commodities(query))))
+        except Exception:
+            self.events.put(("commodity_suggestions", (query, [])))
+
+    def _display_commodity_suggestions(self, query, suggestions):
+        if query != self.commodity_search_var.get().strip():
+            return
+        self.commodity_suggestion_list.delete(0, tk.END)
+        for suggestion in suggestions:
+            self.commodity_suggestion_list.insert(tk.END, suggestion)
+        if suggestions:
+            self.commodity_suggestion_list.pack(fill="x", pady=(5, 0), before=self.commodity_status)
+        else:
+            self.commodity_suggestion_list.pack_forget()
+
+    def _commodity_suggestion_selected(self, *_):
+        selection = self.commodity_suggestion_list.curselection()
+        if not selection:
+            return
+        self.commodity_search_var.set(self.commodity_suggestion_list.get(selection[0]))
+        self.commodity_suggestion_list.pack_forget()
+        self._search_commodity()
+
+    def _commodity_search_worker(self, query):
+        try:
+            self.events.put(("commodity_results", search_commodity(query)))
+        except Exception as exc:
+            self.events.put(("commodity_error", str(exc)))
+
+    def _display_commodity_results(self, result):
+        name = result.name
+        source_url = result.source_url
+        selling = result.selling
+        buying = result.buying
+        matches = result.matches
+        lines = [
+            f"{name.upper()} — LIVE UEX DATA (prices are UEC per SCU)",
+            f"Source: {source_url}",
+            "",
+            f"BUY FROM — {len(selling)} location(s) offering {name}",
+        ]
+        lines.extend(f"  {location:<34} {price:>9} UEC   {region}" for location, price, region in selling)
+        lines.extend(["", f"SELL TO — {len(buying)} location(s) demanding {name}"])
+        lines.extend(f"  {location:<34} {price:>9} UEC   {region}" for location, price, region in buying)
+        if len(matches) > 1:
+            lines.extend(["", "Other UEX matches: " + ", ".join(matches[1:])])
+        lines.extend(["", "UEX data is community-maintained and can change. Open the source URL to verify a price before trading."])
+        self.commodity_results.configure(state="normal")
+        self.commodity_results.delete("1.0", tk.END)
+        self.commodity_results.insert("1.0", "\n".join(lines))
+        self.commodity_results.configure(state="disabled")
+        self.commodity_status.configure(
+            text=f"Loaded {len(selling)} buy location(s) and {len(buying)} sell location(s) from UEX."
+        )
+
     # -------------------- Customize page --------------------
     def _build_customize_page(self):
         t = self.theme
@@ -1663,6 +2027,42 @@ class VoiceKeybindApp(tk.Tk):
             side="left", fill="x", expand=True, ipady=7
         )
 
+        self.phrase_ctrl_var = tk.BooleanVar(value=False)
+        self.phrase_ctrl_check = tk.Checkbutton(
+            keyrow, text="CTRL modifier", variable=self.phrase_ctrl_var,
+            command=lambda: self._apply_keybind_modifiers(
+                self.phrase_key_var, self.phrase_ctrl_var.get(), self.phrase_alt_var.get(),
+                self.phrase_shift_var.get(), self.phrase_modifier_side_var.get(),
+            ),
+            bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+            activebackground=t["panel"], activeforeground=t["text"],
+            font=("Segoe UI", 8),
+        )
+        self.phrase_ctrl_check.pack(side="left", padx=(10, 0))
+        self.phrase_alt_var = tk.BooleanVar(value=False)
+        self.phrase_shift_var = tk.BooleanVar(value=False)
+        self.phrase_modifier_side_var = tk.StringVar(value="Standard")
+        for label, variable in (("ALT", self.phrase_alt_var), ("SHIFT", self.phrase_shift_var)):
+            tk.Checkbutton(
+                keyrow, text=label, variable=variable,
+                command=lambda: self._apply_keybind_modifiers(
+                    self.phrase_key_var, self.phrase_ctrl_var.get(), self.phrase_alt_var.get(),
+                    self.phrase_shift_var.get(), self.phrase_modifier_side_var.get(),
+                ),
+                bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+                activebackground=t["panel"], activeforeground=t["text"], font=("Segoe UI", 8),
+            ).pack(side="left", padx=(6, 0))
+        phrase_side = ttk.Combobox(
+            keyrow, textvariable=self.phrase_modifier_side_var,
+            values=["Standard", "Left", "Right"], state="readonly", width=9,
+            style="Dark.TCombobox",
+        )
+        phrase_side.pack(side="left", padx=(8, 0))
+        phrase_side.bind("<<ComboboxSelected>>", lambda _: self._apply_keybind_modifiers(
+            self.phrase_key_var, self.phrase_ctrl_var.get(), self.phrase_alt_var.get(),
+            self.phrase_shift_var.get(), self.phrase_modifier_side_var.get(),
+        ))
+
         self.phrase_action_type_label = self._label(
             keyrow, "", ("Segoe UI", 8), muted=True
         )
@@ -1801,6 +2201,11 @@ class VoiceKeybindApp(tk.Tk):
         self.phrase_key_var.set(
             self.keybinds.get(action_id, action["key"])
         )
+        ctrl, alt, shift, side = self._keybind_modifier_state(self.phrase_key_var.get())
+        self.phrase_ctrl_var.set(ctrl)
+        self.phrase_alt_var.set(alt)
+        self.phrase_shift_var.set(shift)
+        self.phrase_modifier_side_var.set(side)
 
         hold = (
             f"hold {action['hold']:.1f}s"
@@ -1942,6 +2347,45 @@ class VoiceKeybindApp(tk.Tk):
             relief="flat", bd=0, font=("Cascadia Mono", 10)
         )
         self.custom_key_entry.grid(row=1, column=2, sticky="ew", padx=(8, 0), ipady=8)
+
+        modifier_row = self._track(tk.Frame(form, bg=t["panel"]), "panel")
+        modifier_row.grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self._label(modifier_row, "MODIFIERS", ("Segoe UI", 8, "bold"), muted=True).pack(side="left", padx=(0, 8))
+        self.custom_ctrl_var = tk.BooleanVar(value=False)
+        self.custom_alt_var = tk.BooleanVar(value=False)
+        self.custom_shift_var = tk.BooleanVar(value=False)
+        self.custom_modifier_side_var = tk.StringVar(value="Standard")
+        self.custom_ctrl_check = tk.Checkbutton(
+            modifier_row, text="CTRL", variable=self.custom_ctrl_var,
+            command=lambda: self._apply_keybind_modifiers(
+                self.custom_key_var, self.custom_ctrl_var.get(), self.custom_alt_var.get(),
+                self.custom_shift_var.get(), self.custom_modifier_side_var.get(),
+            ),
+            bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+            activebackground=t["panel"], activeforeground=t["text"],
+            font=("Segoe UI", 8),
+        )
+        self.custom_ctrl_check.pack(side="left", padx=(0, 8))
+        for label, variable in (("ALT", self.custom_alt_var), ("SHIFT", self.custom_shift_var)):
+            tk.Checkbutton(
+                modifier_row, text=label, variable=variable,
+                command=lambda: self._apply_keybind_modifiers(
+                    self.custom_key_var, self.custom_ctrl_var.get(), self.custom_alt_var.get(),
+                    self.custom_shift_var.get(), self.custom_modifier_side_var.get(),
+                ),
+                bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+                activebackground=t["panel"], activeforeground=t["text"], font=("Segoe UI", 8),
+            ).pack(side="left", padx=(0, 8))
+        custom_side = ttk.Combobox(
+            modifier_row, textvariable=self.custom_modifier_side_var,
+            values=["Standard", "Left", "Right"], state="readonly", width=9,
+            style="Dark.TCombobox",
+        )
+        custom_side.pack(side="left")
+        custom_side.bind("<<ComboboxSelected>>", lambda _: self._apply_keybind_modifiers(
+            self.custom_key_var, self.custom_ctrl_var.get(), self.custom_alt_var.get(),
+            self.custom_shift_var.get(), self.custom_modifier_side_var.get(),
+        ))
 
         form.grid_columnconfigure(0, weight=2)
         form.grid_columnconfigure(1, weight=2)
@@ -2185,6 +2629,10 @@ class VoiceKeybindApp(tk.Tk):
         self.custom_name_var.set("")
         self.custom_category_var.set("Custom")
         self.custom_key_var.set("")
+        self.custom_ctrl_var.set(False)
+        self.custom_alt_var.set(False)
+        self.custom_shift_var.set(False)
+        self.custom_modifier_side_var.set("Standard")
         self.custom_type_var.set("tap")
         self.custom_hold_var.set("1.0")
         self.custom_phrase_var.set("")
@@ -2504,6 +2952,44 @@ class VoiceKeybindApp(tk.Tk):
         )
         self.keybind_edit_entry.pack(fill="x", ipady=8, pady=(5, 10))
 
+        self.keybind_edit_ctrl_var = tk.BooleanVar(value=False)
+        self.keybind_edit_ctrl_check = tk.Checkbutton(
+            right, text="CTRL modifier", variable=self.keybind_edit_ctrl_var,
+            command=lambda: self._apply_keybind_modifiers(
+                self.keybind_edit_var, self.keybind_edit_ctrl_var.get(), self.keybind_edit_alt_var.get(),
+                self.keybind_edit_shift_var.get(), self.keybind_edit_modifier_side_var.get(),
+            ),
+            bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+            activebackground=t["panel"], activeforeground=t["text"],
+            font=("Segoe UI", 8),
+        )
+        self.keybind_edit_ctrl_check.pack(anchor="w")
+        self.keybind_edit_alt_var = tk.BooleanVar(value=False)
+        self.keybind_edit_shift_var = tk.BooleanVar(value=False)
+        self.keybind_edit_modifier_side_var = tk.StringVar(value="Standard")
+        modifier_edit_row = self._track(tk.Frame(right, bg=t["panel"]), "panel")
+        modifier_edit_row.pack(anchor="w", pady=(2, 10))
+        for label, variable in (("ALT", self.keybind_edit_alt_var), ("SHIFT", self.keybind_edit_shift_var)):
+            tk.Checkbutton(
+                modifier_edit_row, text=label, variable=variable,
+                command=lambda: self._apply_keybind_modifiers(
+                    self.keybind_edit_var, self.keybind_edit_ctrl_var.get(), self.keybind_edit_alt_var.get(),
+                    self.keybind_edit_shift_var.get(), self.keybind_edit_modifier_side_var.get(),
+                ),
+                bg=t["panel"], fg=t["text"], selectcolor=t["panel2"],
+                activebackground=t["panel"], activeforeground=t["text"], font=("Segoe UI", 8),
+            ).pack(side="left", padx=(0, 8))
+        edit_side = ttk.Combobox(
+            modifier_edit_row, textvariable=self.keybind_edit_modifier_side_var,
+            values=["Standard", "Left", "Right"], state="readonly", width=9,
+            style="Dark.TCombobox",
+        )
+        edit_side.pack(side="left")
+        edit_side.bind("<<ComboboxSelected>>", lambda _: self._apply_keybind_modifiers(
+            self.keybind_edit_var, self.keybind_edit_ctrl_var.get(), self.keybind_edit_alt_var.get(),
+            self.keybind_edit_shift_var.get(), self.keybind_edit_modifier_side_var.get(),
+        ))
+
         self.keybind_phrase_preview = tk.Text(
             right, height=10,
             bg=t["panel2"], fg=t["text"],
@@ -2557,6 +3043,14 @@ class VoiceKeybindApp(tk.Tk):
         }
         return aliases.get(value, value)
 
+    @staticmethod
+    def _keybind_modifier_state(keybind):
+        return modifier_state(keybind)
+
+    @staticmethod
+    def _apply_keybind_modifiers(keybind_var, ctrl, alt, shift, side):
+        keybind_var.set(apply_modifiers(keybind_var.get(), ctrl, alt, shift, side))
+
     def _refresh_keybind_search(self):
         if not hasattr(self, "keybind_search_list"):
             return
@@ -2607,6 +3101,11 @@ class VoiceKeybindApp(tk.Tk):
 
         self.keybind_selected_label.configure(text=action["label"])
         self.keybind_edit_var.set(key)
+        ctrl, alt, shift, side = self._keybind_modifier_state(key)
+        self.keybind_edit_ctrl_var.set(ctrl)
+        self.keybind_edit_alt_var.set(alt)
+        self.keybind_edit_shift_var.set(shift)
+        self.keybind_edit_modifier_side_var.set(side)
 
         phrases = self.phrases.get(action_id, [])
         self.keybind_phrase_preview.configure(state="normal")
@@ -3281,6 +3780,65 @@ class VoiceKeybindApp(tk.Tk):
             "OPEN RSI ANNOUNCEMENTS",
             ANNOUNCEMENTS_URL,
         )
+
+    def _build_credit_page(self):
+        t = self.theme
+        self.credit_page = self._track(tk.Frame(self.page_host, bg=t["bg"]), "bg")
+        panel = self._panel(self.credit_page)
+        panel.pack(fill="both", expand=True)
+        inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
+        inner.pack(fill="both", expand=True, padx=36, pady=30)
+
+        self._label(inner, "CREDIT & DATA SOURCES", ("Segoe UI", 20, "bold")).pack(anchor="w")
+        intro = self._label(
+            inner,
+            "Kabutopz Voice Protocol does not own the third-party information shown in its lookup tools. "
+            "It presents publicly available community and official data in one convenient place for Star Citizen players. "
+            "Credit belongs to the creators and contributors behind the sources below—we love what they do for the community.",
+            ("Segoe UI", 10), muted=True,
+        )
+        intro.configure(wraplength=1080, justify="left")
+        intro.pack(anchor="w", fill="x", pady=(8, 18))
+
+        self._label(inner, "CURRENT SOURCES", ("Segoe UI", 9, "bold"), muted=True).pack(anchor="w", pady=(0, 7))
+        source_descriptions = []
+        sources = (
+            ("OPEN UEX", "Commodity prices and trading-location data", "https://uexcorp.space/"),
+            ("OPEN CSTONE FINDER", "Component and item availability, locations, and specifications", "https://finder.cstone.space/"),
+            ("OPEN STAR CITIZEN WIKI", "Ship and mining lookup data", "https://starcitizen.tools/"),
+            ("OPEN RSI SPECTRUM", "Official Star Citizen announcements", ANNOUNCEMENTS_URL),
+        )
+        for button_text, description, url in sources:
+            row = self._track(tk.Frame(inner, bg=t["panel2"]), "panel2")
+            row.pack(fill="x", pady=4)
+            tk.Button(
+                row, text=button_text, command=lambda link=url: webbrowser.open_new_tab(link),
+                bg=t["accent"], fg="#07111c", activebackground=t["accent"], activeforeground="#07111c",
+                relief="flat", bd=0, font=("Segoe UI", 8, "bold"), padx=12, pady=8,
+            ).pack(side="left", padx=8, pady=8)
+            source_description = self._label(row, description, ("Segoe UI", 9), muted=True, panel2=True)
+            source_description.configure(wraplength=760, justify="left")
+            source_description.pack(side="left", fill="x", expand=True, padx=(4, 10))
+            source_descriptions.append(source_description)
+
+        disclaimer = self._label(
+            inner,
+            "Data can change, be incomplete, or be unavailable. Verify important prices and information on the original source before relying on it. "
+            "This app is not affiliated with, endorsed by, or a substitute for the listed websites; their names, content, and trademarks remain with their respective owners. "
+            "Future data providers added to the app will be credited on this page.",
+            ("Segoe UI", 9), muted=True,
+        )
+        disclaimer.configure(wraplength=1080, justify="left")
+        disclaimer.pack(anchor="w", fill="x", pady=(18, 0))
+
+        def reflow_credit_text(event):
+            wrap_length = max(500, event.width - 40)
+            intro.configure(wraplength=wrap_length)
+            disclaimer.configure(wraplength=wrap_length)
+            for description_label in source_descriptions:
+                description_label.configure(wraplength=max(320, wrap_length - 270))
+
+        inner.bind("<Configure>", reflow_credit_text)
 
     # -------------------- devices --------------------
     def refresh_devices(self):
@@ -4041,6 +4599,22 @@ class VoiceKeybindApp(tk.Tk):
                         self.mining_location_result.configure(text=answer)
                 elif kind == "ship_search_result":
                     self._set_ship_results(value)
+                elif kind == "commodity_results":
+                    self._display_commodity_results(value)
+                elif kind == "commodity_error":
+                    if hasattr(self, "commodity_status"):
+                        self.commodity_status.configure(text=f"UEX lookup failed: {value}")
+                elif kind == "commodity_suggestions":
+                    query, suggestions = value
+                    self._display_commodity_suggestions(query, suggestions)
+                elif kind == "component_results":
+                    self._display_component_results(value)
+                elif kind == "component_error":
+                    if hasattr(self, "component_status"):
+                        self.component_status.configure(text=f"CStone lookup failed: {value}")
+                elif kind == "component_suggestions":
+                    query, suggestions = value
+                    self._display_component_suggestions(query, suggestions)
                 elif kind == "voice_off":
                     self.running = False
                     self._set_status()

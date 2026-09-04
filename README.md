@@ -11,8 +11,9 @@ This is an accessibility tool.
 - Voice commands for common *Star Citizen* actions
 - Faster voice-activity capture that submits a command shortly after you stop speaking
 - Optional global keybind to toggle listening on and off
-- Editable phrases and keybinds
+- Editable phrases and keybinds with Ctrl, Alt, Shift, Left, and Right modifiers
 - Custom commands with one or more trigger phrases
+- UEX commodity price and buy/sell-location lookup
 - Tap and Hold input modes
 - Ship purchase and rental lookups
 - Mining location questions with spoken answers
@@ -25,6 +26,8 @@ This is an accessibility tool.
 The PAGE menu includes:
 
 - **VOICE PROTOCOL** — Start and manage voice control.
+- **HOW TO** — Learn the command, resource, and custom-phrase workflow.
+- **COMMODITIES** — Search UEX commodity prices and buy/sell locations.
 - **CUSTOMIZE** — Change app settings.
 - **PHRASES** — Edit phrases and keybinds by group.
 - **CUSTOM WORDS** — Create and manage custom voice commands.
@@ -74,7 +77,7 @@ The **CUSTOM WORDS** page lets you:
 
 - Name a new action.
 - Pick an existing subcategory or enter a new one.
-- Set a keybind.
+- Set a keybind, including Ctrl, Alt, Shift, and Left/Right modifier variants.
 - Choose Tap or Hold.
 - Add more than one trigger phrase.
 - Turn each phrase on or off.
@@ -218,6 +221,7 @@ The Windows build:
 - Includes company, product, file, and version details.
 - Bundles the app icons, logo art, and Buy Me a Coffee image.
 - Creates a SHA-256 hash after each successful build.
+- Requests administrator permission at launch so configured keys can be sent to the game reliably.
 
 These steps can help cut false antivirus alerts, but no clean build can promise zero alerts from every antivirus tool. For public releases, sign each build with the same trusted code-signing certificate.
 
@@ -227,7 +231,7 @@ Ship and commodity results come from the community-run Star Citizen Wiki API. Th
 
 ## Version
 
-Kabutopz Voice Protocol v1.1
+Kabutopz Voice Protocol v1.2
 Powered by the Community <3
 
 Future releases increment by 0.1: 1.0, 1.1, through 1.9, then 2.0.

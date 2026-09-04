@@ -1,12 +1,12 @@
 @echo off
 setlocal
-title Kabutopz Voice Protocol v1.1 - EXE Builder
+title Kabutopz Voice Protocol v1.2 - EXE Builder
 cd /d "%~dp0"
 
 set "BUILD_PYTHON=build\.venv\Scripts\python.exe"
 
 echo ==============================================
-echo   KABUTOPZ VOICE PROTOCOL v1.1
+echo   KABUTOPZ VOICE PROTOCOL v1.2
 echo   Clean folder release - no self-extracting overlay
 echo ==============================================
 echo.
@@ -32,7 +32,7 @@ if errorlevel 1 goto :error
 "%BUILD_PYTHON%" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 goto :error
 
-"%BUILD_PYTHON%" -m PyInstaller --noconfirm --clean --onedir --noupx --contents-directory "_internal" --name KabutopzVoiceProtocol --windowed --version-file "version_info.txt" --icon "assets\kabutopz_app_icon.ico" --exclude-module torch --exclude-module whisper --exclude-module faster_whisper --exclude-module ctranslate2 --exclude-module onnxruntime --exclude-module tensorflow --exclude-module pocketsphinx --exclude-module vosk --add-data "assets\kabutopz_app_icon.png;assets" --add-data "assets\kabutopz_header_full.png;assets" --add-data "assets\kabutopz_love.png;assets" --add-data "assets\kabutopz_watermark.jpg;assets" --add-data "assets\buy_me_a_coffee.png;assets" starcitizen_voice_keybinds.py
+"%BUILD_PYTHON%" -m PyInstaller --noconfirm --clean --onedir --noupx --uac-admin --contents-directory "_internal" --name KabutopzVoiceProtocol --windowed --version-file "version_info.txt" --icon "assets\kabutopz_app_icon.ico" --exclude-module torch --exclude-module whisper --exclude-module faster_whisper --exclude-module ctranslate2 --exclude-module onnxruntime --exclude-module tensorflow --exclude-module pocketsphinx --exclude-module vosk --add-data "assets\kabutopz_app_icon.png;assets" --add-data "assets\kabutopz_header_full.png;assets" --add-data "assets\kabutopz_love.png;assets" --add-data "assets\kabutopz_watermark.jpg;assets" --add-data "assets\buy_me_a_coffee.png;assets" starcitizen_voice_keybinds.py
 if errorlevel 1 goto :error
 
 rem SpeechRecognition ships offline data and FLAC tools for other systems.
