@@ -1,5 +1,5 @@
 """
-Kabutopz Voice Protocol v1.3
+Kabutopz Voice Protocol v1.4
 
 Star Citizen voice-command/keybind utility.
 Includes Voice Protocol, customization, grouped phrases, editable keybinds,
@@ -35,14 +35,14 @@ from win_input import (
 )
 from app_paths import resource_path
 from commodity_service import search_commodity, suggest_commodities
-from component_service import search_component, suggest_components
+from component_service import search_component, search_ship_weapon, suggest_components, suggest_ship_weapons
 from keybind_modifiers import apply_modifiers, modifier_state
 
 
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
-APP_VERSION = "1.3"
+APP_VERSION = "1.4"
 COMMAND_SAMPLE_RATE = 16000
 COMMAND_VOICE_THRESHOLD = 450
 COMMAND_END_SILENCE_SECONDS = 0.45
@@ -50,7 +50,7 @@ COMMAND_MAX_CAPTURE_SECONDS = 2.6
 COMMAND_PREROLL_CHUNKS = 8
 PAGE_ORDER = (
     "VOICE PROTOCOL", "HOW TO", "CUSTOMIZE", "PHRASES", "KEYBINDS",
-    "CUSTOM WORDS", "COMPONENTS", "COMMODITIES", "MINING MODE", "SHIP FINDER",
+    "CUSTOM WORDS", "COMPONENTS", "SHIP WEAPONS", "COMMODITIES", "MINING MODE", "SHIP FINDER",
     "GUIDES", "ANNOUNCEMENTS", "CREDIT",
 )
 
@@ -517,6 +517,7 @@ class VoiceKeybindApp(tk.Tk):
         self._build_voice_page()
         self._build_how_to_page()
         self._build_components_page()
+        self._build_ship_weapons_page()
         self._build_commodities_page()
         self._build_customize_page()
         self._build_phrases_page()
@@ -1099,6 +1100,7 @@ class VoiceKeybindApp(tk.Tk):
             "CUSTOM WORDS": "CUSTOM WORDS",
             "COMMODITIES": "COMMODITIES",
             "COMPONENTS": "COMPONENTS",
+            "SHIP WEAPONS": "SHIP WEAPONS",
             "MINING MODE": "MINING",
             "SHIP FINDER": "SHIP FINDER",
             "GUIDES": "GUIDES",
@@ -1130,6 +1132,7 @@ class VoiceKeybindApp(tk.Tk):
             self.voice_page,
             self.how_to_page,
             self.components_page,
+            self.ship_weapons_page,
             self.commodities_page,
             self.customize_page,
             self.phrases_page,
@@ -1146,6 +1149,7 @@ class VoiceKeybindApp(tk.Tk):
         pages = {
             "HOW TO": self.how_to_page,
             "COMPONENTS": self.components_page,
+            "SHIP WEAPONS": self.ship_weapons_page,
             "COMMODITIES": self.commodities_page,
             "CUSTOMIZE": self.customize_page,
             "PHRASES": self.phrases_page,
@@ -1587,7 +1591,7 @@ class VoiceKeybindApp(tk.Tk):
         inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
         inner.pack(fill="both", expand=True, padx=28, pady=24)
         self._label(inner, "COMPONENTS", ("Segoe UI", 18, "bold")).pack(anchor="w")
-        self._label(inner, "Search CStone Finder for components, listed prices, locations, and specifications.", ("Segoe UI", 9), muted=True).pack(anchor="w", pady=(4, 16))
+        self._label(inner, "Search the Star Citizen Wiki for components, listed prices, locations, and specifications.", ("Segoe UI", 9), muted=True).pack(anchor="w", pady=(4, 16))
         row = self._track(tk.Frame(inner, bg=t["panel"]), "panel")
         row.pack(fill="x")
         self.component_search_var = tk.StringVar()
@@ -1595,7 +1599,7 @@ class VoiceKeybindApp(tk.Tk):
         entry.pack(side="left", fill="x", expand=True, ipady=8)
         entry.bind("<Return>", lambda _: self._search_component())
         entry.bind("<KeyRelease>", self._component_search_typed)
-        tk.Button(row, text="SEARCH CSTONE", command=self._search_component, bg=t["accent"], fg="#07111c", activebackground=t["accent"], activeforeground="#07111c", relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=16, pady=8).pack(side="left", padx=(10, 0))
+        tk.Button(row, text="SEARCH WIKI", command=self._search_component, bg=t["accent"], fg="#07111c", activebackground=t["accent"], activeforeground="#07111c", relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=16, pady=8).pack(side="left", padx=(10, 0))
         self.component_suggestions = tk.Listbox(inner, height=5, bg=t["panel2"], fg=t["text"], selectbackground=t["border"], selectforeground=t["text"], relief="flat", bd=0, font=("Cascadia Mono", 9), activestyle="none")
         self.component_suggestions.bind("<<ListboxSelect>>", self._component_suggestion_selected)
         self.component_suggestions.pack_forget()
@@ -1648,7 +1652,7 @@ class VoiceKeybindApp(tk.Tk):
         if not query:
             self.component_status.configure(text="Enter a component name first.")
             return
-        self.component_status.configure(text="Searching CStone live data…")
+        self.component_status.configure(text="Searching Star Citizen Wiki live data…")
         threading.Thread(target=self._component_search_worker, args=(query,), daemon=True).start()
 
     def _component_search_worker(self, query):
@@ -1658,17 +1662,109 @@ class VoiceKeybindApp(tk.Tk):
             self.events.put(("component_error", str(exc)))
 
     def _display_component_results(self, result):
-        lines = [f"{result.name.upper()} — LIVE CSTONE FINDER DATA", f"Source: {result.source_url}", "", "BUY LOCATIONS"]
-        lines.extend(f"  {location:<50} {price:>12} UEC   {verified}" for location, price, verified in result.locations)
+        lines = [f"{result.name.upper()} — LIVE STAR CITIZEN WIKI DATA", f"Source: {result.source_url}", "", "BUY LOCATIONS"]
+        lines.extend(f"  {location:<50} {price:>12} UEC   {system}" for system, location, price in result.locations)
         lines.extend(["", "SPECIFICATIONS"])
         lines.extend(f"  {label}: {value}" for label, value in result.specifications)
         if not result.locations:
-            lines.append("  No current CStone shop locations were listed for this item.")
+            lines.append("  No current Wiki shop locations were listed for this item.")
         self.component_results.configure(state="normal")
         self.component_results.delete("1.0", tk.END)
         self.component_results.insert("1.0", "\n".join(lines))
         self.component_results.configure(state="disabled")
-        self.component_status.configure(text=f"Loaded {len(result.locations)} listed location(s) from CStone Finder.")
+        self.component_status.configure(text=f"Loaded {len(result.locations)} listed location(s) from Star Citizen Wiki.")
+
+    # -------------------- Ship Weapons page --------------------
+    def _build_ship_weapons_page(self):
+        t = self.theme
+        self.ship_weapons_page = self._track(tk.Frame(self.page_host, bg=t["bg"]), "bg")
+        panel = self._panel(self.ship_weapons_page)
+        panel.pack(fill="both", expand=True)
+        inner = self._track(tk.Frame(panel, bg=t["panel"]), "panel")
+        inner.pack(fill="both", expand=True, padx=28, pady=24)
+        self._label(inner, "SHIP WEAPONS", ("Segoe UI", 18, "bold")).pack(anchor="w")
+        self._label(inner, "Search the Star Citizen Wiki for ship-weapon locations, prices, and specifications. Spoken numerals work: Deadbolt five finds Deadbolt V.", ("Segoe UI", 9), muted=True).pack(anchor="w", pady=(4, 16))
+        row = self._track(tk.Frame(inner, bg=t["panel"]), "panel")
+        row.pack(fill="x")
+        self.ship_weapon_search_var = tk.StringVar()
+        entry = tk.Entry(row, textvariable=self.ship_weapon_search_var, bg=t["panel2"], fg=t["text"], insertbackground=t["text"], relief="flat", bd=0, font=("Cascadia Mono", 10))
+        entry.pack(side="left", fill="x", expand=True, ipady=8)
+        entry.bind("<Return>", lambda _: self._search_ship_weapon())
+        entry.bind("<KeyRelease>", self._ship_weapon_search_typed)
+        tk.Button(row, text="SEARCH WIKI", command=self._search_ship_weapon, bg=t["accent"], fg="#07111c", activebackground=t["accent"], activeforeground="#07111c", relief="flat", bd=0, font=("Segoe UI", 9, "bold"), padx=16, pady=8).pack(side="left", padx=(10, 0))
+        self.ship_weapon_suggestions = tk.Listbox(inner, height=5, bg=t["panel2"], fg=t["text"], selectbackground=t["border"], selectforeground=t["text"], relief="flat", bd=0, font=("Cascadia Mono", 9), activestyle="none")
+        self.ship_weapon_suggestions.bind("<<ListboxSelect>>", self._ship_weapon_suggestion_selected)
+        self.ship_weapon_suggestions.pack_forget()
+        self.ship_weapon_suggestion_after = None
+        self.ship_weapon_status = self._label(inner, "Type a vehicle weapon name, for example AD4B, Greatsword, or Mantis.", ("Segoe UI", 8), muted=True)
+        self.ship_weapon_status.pack(anchor="w", pady=(8, 8))
+        frame = self._track(tk.Frame(inner, bg=t["panel2"]), "panel2")
+        frame.pack(fill="both", expand=True)
+        self.ship_weapon_results = tk.Text(frame, bg=t["panel2"], fg=t["text"], relief="flat", bd=0, wrap="none", padx=12, pady=10, font=("Cascadia Mono", 9), state="disabled")
+        self.ship_weapon_results.pack(side="left", fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(frame, command=self.ship_weapon_results.yview)
+        scrollbar.pack(side="right", fill="y")
+        self.ship_weapon_results.configure(yscrollcommand=scrollbar.set)
+
+    def _ship_weapon_search_typed(self, *_):
+        query = self.ship_weapon_search_var.get().strip()
+        if self.ship_weapon_suggestion_after is not None:
+            self.after_cancel(self.ship_weapon_suggestion_after)
+        if not query:
+            self.ship_weapon_suggestions.pack_forget()
+            return
+        self.ship_weapon_suggestion_after = self.after(250, lambda: threading.Thread(target=self._ship_weapon_suggestions_worker, args=(query,), daemon=True).start())
+
+    def _ship_weapon_suggestions_worker(self, query):
+        try:
+            self.events.put(("ship_weapon_suggestions", (query, suggest_ship_weapons(query))))
+        except Exception:
+            self.events.put(("ship_weapon_suggestions", (query, [])))
+
+    def _display_ship_weapon_suggestions(self, query, suggestions):
+        if query != self.ship_weapon_search_var.get().strip():
+            return
+        self.ship_weapon_suggestions.delete(0, tk.END)
+        for suggestion in suggestions:
+            self.ship_weapon_suggestions.insert(tk.END, suggestion)
+        if suggestions:
+            self.ship_weapon_suggestions.pack(fill="x", pady=(5, 0), before=self.ship_weapon_status)
+        else:
+            self.ship_weapon_suggestions.pack_forget()
+
+    def _ship_weapon_suggestion_selected(self, *_):
+        selected = self.ship_weapon_suggestions.curselection()
+        if selected:
+            self.ship_weapon_search_var.set(self.ship_weapon_suggestions.get(selected[0]))
+            self.ship_weapon_suggestions.pack_forget()
+            self._search_ship_weapon()
+
+    def _search_ship_weapon(self):
+        query = self.ship_weapon_search_var.get().strip()
+        if not query:
+            self.ship_weapon_status.configure(text="Enter a ship weapon name first.")
+            return
+        self.ship_weapon_status.configure(text="Searching Star Citizen Wiki live data…")
+        threading.Thread(target=self._ship_weapon_search_worker, args=(query,), daemon=True).start()
+
+    def _ship_weapon_search_worker(self, query):
+        try:
+            self.events.put(("ship_weapon_results", search_ship_weapon(query)))
+        except Exception as exc:
+            self.events.put(("ship_weapon_error", str(exc)))
+
+    def _display_ship_weapon_results(self, result):
+        lines = [f"{result.name.upper()} — LIVE STAR CITIZEN WIKI SHIP WEAPON DATA", f"Source: {result.source_url}", "", "BUY LOCATIONS"]
+        lines.extend(f"  {location:<50} {price:>12} UEC   {system}" for system, location, price in result.locations)
+        lines.extend(["", "WEAPON STATISTICS"])
+        lines.extend(f"  {label}: {value}" for label, value in result.specifications)
+        if not result.locations:
+            lines.append("  No current Wiki shop locations were listed for this weapon.")
+        self.ship_weapon_results.configure(state="normal")
+        self.ship_weapon_results.delete("1.0", tk.END)
+        self.ship_weapon_results.insert("1.0", "\n".join(lines))
+        self.ship_weapon_results.configure(state="disabled")
+        self.ship_weapon_status.configure(text=f"Loaded {len(result.locations)} listed location(s) from Star Citizen Wiki.")
 
     # -------------------- Commodities page --------------------
     def _build_commodities_page(self):
@@ -3804,7 +3900,7 @@ class VoiceKeybindApp(tk.Tk):
         source_descriptions = []
         sources = (
             ("OPEN UEX", "Commodity prices and trading-location data", "https://uexcorp.space/"),
-            ("OPEN CSTONE FINDER", "Component and item availability, locations, and specifications", "https://finder.cstone.space/"),
+            ("OPEN STAR CITIZEN WIKI", "Ship-component and ship-weapon availability, locations, and specifications", "https://starcitizen.tools/"),
             ("OPEN STAR CITIZEN WIKI", "Ship and mining lookup data", "https://starcitizen.tools/"),
             ("OPEN RSI SPECTRUM", "Official Star Citizen announcements", ANNOUNCEMENTS_URL),
         )
@@ -4312,6 +4408,87 @@ class VoiceKeybindApp(tk.Tk):
                     return resource
         return None
 
+    def _extract_component_location_question(self, heard):
+        """Return a Wiki component requested through a natural location question."""
+        text = heard.lower().strip()
+        patterns = (
+            r"where can i buy (?:an? )?(.+)",
+            r"where do i buy (?:an? )?(.+)",
+            r"where is (?:an? )?(.+) sold",
+            r"list (?:the )?locations (?:for|of) (.+)",
+            r"show (?:me )?(?:the )?locations (?:for|of) (.+)",
+            r"what locations (?:sell|have) (.+)",
+            r"find (?:the )?locations (?:for|of) (.+)",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if not match:
+                continue
+            component = match.group(1).strip(" ?.,")
+            component = re.sub(r"\b(?:a|an|the)\s+", "", component).strip()
+            component = re.sub(r"\s+component$", "", component).strip()
+            if component:
+                return component
+        return None
+
+    def _extract_ship_weapon_location_question(self, heard):
+        """Return a weapon named in an explicit ship-weapon location request."""
+        text = heard.lower().strip()
+        patterns = (
+            r"where can i buy (?:an? )?(.+?) (?:ship )?weapon",
+            r"where do i buy (?:an? )?(.+?) (?:ship )?weapon",
+            r"list (?:the )?(?:ship )?weapon locations (?:for|of) (.+)",
+            r"list locations for (?:the )?(.+?) (?:ship )?weapon",
+            r"what locations sell (?:the )?(.+?) (?:ship )?weapon",
+            r"where is (?:the )?(.+?) (?:ship )?weapon sold",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                weapon = match.group(1).strip(" ?.,")
+                weapon = re.sub(r"\b(?:a|an|the)\s+", "", weapon).strip()
+                if weapon:
+                    return weapon
+        return None
+
+    def _component_voice_lookup_worker(self, component):
+        try:
+            result = search_component(component)
+            locations = result.locations[:5]
+            if locations:
+                spoken_locations = ", ".join(
+                    f"{location}, {system}, for {price} a UEC"
+                    for system, location, price in locations
+                )
+                answer = f"{result.name} is listed at {spoken_locations}."
+            else:
+                answer = f"I found {result.name}, but the Star Citizen Wiki has no current buy locations listed."
+            self.events.put(("component_voice_lookup", (component, result, answer)))
+            self._speak(answer, force=True)
+        except Exception:
+            answer = f"I could not find current Star Citizen Wiki locations for {component}."
+            self.events.put(("component_voice_error", answer))
+            self._speak(answer, force=True)
+
+    def _ship_weapon_voice_lookup_worker(self, weapon):
+        try:
+            result = search_ship_weapon(weapon)
+            locations = result.locations[:5]
+            if locations:
+                spoken_locations = ", ".join(
+                    f"{location}, {system}, for {price} a UEC"
+                    for system, location, price in locations
+                )
+                answer = f"{result.name} is listed at {spoken_locations}."
+            else:
+                answer = f"I found {result.name}, but the Star Citizen Wiki has no current buy locations listed."
+            self.events.put(("ship_weapon_voice_lookup", (weapon, result, answer)))
+            self._speak(answer, force=True)
+        except Exception:
+            answer = f"I could not find current Star Citizen Wiki locations for the ship weapon {weapon}."
+            self.events.put(("ship_weapon_voice_error", answer))
+            self._speak(answer, force=True)
+
     def _build_phrase_matcher(self):
         pairs = []
         for action_id, phrases in self.phrases.items():
@@ -4488,6 +4665,26 @@ class VoiceKeybindApp(tk.Tk):
                         ))
                         continue
 
+                    # Explicit ship-weapon location question.
+                    ship_weapon = self._extract_ship_weapon_location_question(heard)
+                    if ship_weapon:
+                        threading.Thread(
+                            target=self._ship_weapon_voice_lookup_worker,
+                            args=(ship_weapon,),
+                            daemon=True,
+                        ).start()
+                        continue
+
+                    # Component location question.
+                    component = self._extract_component_location_question(heard)
+                    if component:
+                        threading.Thread(
+                            target=self._component_voice_lookup_worker,
+                            args=(component,),
+                            daemon=True,
+                        ).start()
+                        continue
+
                     # Mining location question.
                     mining_resource = self._extract_mining_location_question(heard)
                     if mining_resource:
@@ -4611,10 +4808,30 @@ class VoiceKeybindApp(tk.Tk):
                     self._display_component_results(value)
                 elif kind == "component_error":
                     if hasattr(self, "component_status"):
-                        self.component_status.configure(text=f"CStone lookup failed: {value}")
+                        self.component_status.configure(text=f"Wiki lookup failed: {value}")
                 elif kind == "component_suggestions":
                     query, suggestions = value
                     self._display_component_suggestions(query, suggestions)
+                elif kind == "component_voice_lookup":
+                    component, result, answer = value
+                    self._display_component_results(result)
+                    self._history_add(f"Component locations: {answer}")
+                elif kind == "component_voice_error":
+                    self._history_add(value, "error")
+                elif kind == "ship_weapon_results":
+                    self._display_ship_weapon_results(value)
+                elif kind == "ship_weapon_error":
+                    if hasattr(self, "ship_weapon_status"):
+                        self.ship_weapon_status.configure(text=f"Wiki weapon lookup failed: {value}")
+                elif kind == "ship_weapon_suggestions":
+                    query, suggestions = value
+                    self._display_ship_weapon_suggestions(query, suggestions)
+                elif kind == "ship_weapon_voice_lookup":
+                    weapon, result, answer = value
+                    self._display_ship_weapon_results(result)
+                    self._history_add(f"Ship weapon locations: {answer}")
+                elif kind == "ship_weapon_voice_error":
+                    self._history_add(value, "error")
                 elif kind == "voice_off":
                     self.running = False
                     self._set_status()

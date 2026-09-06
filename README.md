@@ -14,6 +14,8 @@ This is an accessibility tool.
 - Editable phrases and keybinds with Ctrl, Alt, Shift, Left, and Right modifiers
 - Custom commands with one or more trigger phrases
 - UEX commodity price and buy/sell-location lookup
+- Spoken Star Citizen Wiki component-location lookup, such as “where can I buy an Atlas?”
+- Dedicated Star Citizen Wiki ship-weapons lookup with live stats, prices, locations, and spoken queries (including spoken Roman numerals, such as “Deadbolt five”)
 - Tap and Hold input modes
 - Ship purchase and rental lookups
 - Mining location questions with spoken answers
@@ -28,6 +30,7 @@ The PAGE menu includes:
 - **VOICE PROTOCOL** — Start and manage voice control.
 - **HOW TO** — Learn the command, resource, and custom-phrase workflow.
 - **COMMODITIES** — Search UEX commodity prices and buy/sell locations.
+- **SHIP WEAPONS** — Search the Star Citizen Wiki's vehicle-weapon entries.
 - **CUSTOMIZE** — Change app settings.
 - **PHRASES** — Edit phrases and keybinds by group.
 - **CUSTOM WORDS** — Create and manage custom voice commands.
@@ -128,6 +131,30 @@ where can I mine iron
 The app checks current Star Citizen Wiki commodity data and speaks the answer. If the live lookup fails, it uses a saved Iron hotspot list.
 
 The existing reverse signature lookup remains on the **MINING MODE** page.
+
+## Component Questions
+
+While Voice Protocol is listening, ask where a Star Citizen Wiki component or item can be bought. For example:
+
+```text
+where can I buy an Atlas component
+list locations for Atlas
+what locations sell Atlas
+```
+
+The app searches the Star Citizen Wiki, speaks up to five current locations and prices, and shows the full result on the **COMPONENTS** page.
+
+## Ship Weapon Questions
+
+The **SHIP WEAPONS** page uses the Star Citizen Wiki. While Voice Protocol is listening, say:
+
+```text
+where can I buy an AD4B ship weapon
+list locations for the Greatsword ship weapon
+what locations sell the Mantis ship weapon
+```
+
+The app speaks the current Wiki locations and prices, then shows the complete weapon statistics and locations on the **SHIP WEAPONS** page. Roman numerals can be spoken normally: “where can I buy a Deadbolt five ship weapon?” finds **Deadbolt V Cannon**.
 
 ## Support
 
@@ -231,7 +258,7 @@ Ship and commodity results come from the community-run Star Citizen Wiki API. Th
 
 ## Version
 
-Kabutopz Voice Protocol v1.3
+Kabutopz Voice Protocol v1.4
 Powered by the Community <3
 
 Future releases increment by 0.1: 1.0, 1.1, through 1.9, then 2.0.
