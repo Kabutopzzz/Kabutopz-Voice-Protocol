@@ -221,7 +221,7 @@ The Windows build:
 - Includes company, product, file, and version details.
 - Bundles the app icons, logo art, and Buy Me a Coffee image.
 - Creates a SHA-256 hash after each successful build.
-- Requests administrator permission at launch so configured keys can be sent to the game reliably.
+- Avoids forced administrator elevation to reduce false-positive detection risk. If Star Citizen is running as Administrator, launch this app as Administrator manually so Windows can send keys to the game.
 
 These steps can help cut false antivirus alerts, but no clean build can promise zero alerts from every antivirus tool. For public releases, sign each build with the same trusted code-signing certificate.
 
@@ -231,7 +231,7 @@ Ship and commodity results come from the community-run Star Citizen Wiki API. Th
 
 ## Version
 
-Kabutopz Voice Protocol v1.2
+Kabutopz Voice Protocol v1.3
 Powered by the Community <3
 
 Future releases increment by 0.1: 1.0, 1.1, through 1.9, then 2.0.

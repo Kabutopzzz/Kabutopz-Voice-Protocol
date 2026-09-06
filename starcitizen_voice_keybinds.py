@@ -1,5 +1,5 @@
 """
-Kabutopz Voice Protocol v1.2
+Kabutopz Voice Protocol v1.3
 
 Star Citizen voice-command/keybind utility.
 Includes Voice Protocol, customization, grouped phrases, editable keybinds,
@@ -42,7 +42,7 @@ from keybind_modifiers import apply_modifiers, modifier_state
 APP_DIR = Path.home() / ".star_citizen_voice_keybinds"
 SETTINGS_FILE = APP_DIR / "settings.json"
 COOLDOWN_SECONDS = 1.5
-APP_VERSION = "1.2"
+APP_VERSION = "1.3"
 COMMAND_SAMPLE_RATE = 16000
 COMMAND_VOICE_THRESHOLD = 450
 COMMAND_END_SILENCE_SECONDS = 0.45

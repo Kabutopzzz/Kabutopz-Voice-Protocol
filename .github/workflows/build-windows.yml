@@ -27,18 +27,34 @@ jobs:
 
       - name: Build EXE
         run: >
-          python -m PyInstaller --noconfirm --clean --onedir --noupx --uac-admin
+          python -m PyInstaller --noconfirm --clean --onedir --noupx
           --contents-directory _internal --name KabutopzVoiceProtocol --windowed
           --version-file version_info.txt --icon assets/kabutopz_app_icon.ico
           --exclude-module torch --exclude-module whisper --exclude-module faster_whisper
           --exclude-module ctranslate2 --exclude-module onnxruntime --exclude-module tensorflow
           --exclude-module pocketsphinx --exclude-module vosk
+          --exclude-module PIL.ImageCms --exclude-module PIL.ImageMath --exclude-module PIL.ImageQt
           --add-data "assets/kabutopz_app_icon.png;assets"
           --add-data "assets/kabutopz_header_full.png;assets"
           --add-data "assets/kabutopz_love.png;assets"
           --add-data "assets/kabutopz_watermark.jpg;assets"
           --add-data "assets/buy_me_a_coffee.png;assets"
           starcitizen_voice_keybinds.py
+
+      - name: Remove unused platform binaries
+        shell: pwsh
+        run: |
+          $internal = "dist/KabutopzVoiceProtocol/_internal"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudio.dylib"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudio32bit-asio.dll"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudio32bit.dll"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudio64bit-asio.dll"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudioarm64-asio.dll"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/_sounddevice_data/portaudio-binaries/libportaudioarm64.dll"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/PIL/_avif.cp311-win_amd64.pyd"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/PIL/_imagingcms.cp311-win_amd64.pyd"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/PIL/_imagingmath.cp311-win_amd64.pyd"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$internal/PIL/_webp.cp311-win_amd64.pyd"
 
       - name: Package Windows release
         shell: pwsh
